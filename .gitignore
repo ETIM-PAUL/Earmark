@@ -1,0 +1,27 @@
+# Planning and docs stay local
+/Earmark*Build Plan*.md
+/docs/
+
+# Dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+target/
+*.wasm
+
+# Secrets: never commit keys
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+**/neardev/
+credentials/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

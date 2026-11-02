@@ -1,0 +1,17 @@
+{
+  "name": "@earmark/bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telegram and WhatsApp assistant on NEAR AI Cloud",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@earmark/shared": "workspace:*"
+  }
+}

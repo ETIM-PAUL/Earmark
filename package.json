@@ -1,0 +1,27 @@
+{
+  "name": "earmark",
+  "private": true,
+  "description": "Send money home with rules. Recipients ask an AI to pay bills inside them.",
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build && pnpm build:contracts",
+    "build:ts": "pnpm -r build",
+    "build:contracts": "cargo build --manifest-path contracts/Cargo.toml --target wasm32-unknown-unknown --release",
+    "test": "pnpm -r test && pnpm test:contracts",
+    "test:ts": "pnpm -r test",
+    "test:contracts": "cargo test --manifest-path contracts/Cargo.toml",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}
