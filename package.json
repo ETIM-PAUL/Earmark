@@ -16,7 +16,8 @@
     "test:contracts": "cargo test --manifest-path contracts/Cargo.toml",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "check:accounts": "pnpm --filter @earmark/scripts check:accounts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",

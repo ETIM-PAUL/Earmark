@@ -1,0 +1,19 @@
+{
+  "name": "@earmark/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Operational scripts: account and key smoke checks",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "check:accounts": "tsx src/check-accounts.ts"
+  },
+  "dependencies": {
+    "@earmark/config": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
+  }
+}

@@ -3,6 +3,7 @@ packages:
   - services/*
   - bot
   - apps/*
+  - scripts
 minimumReleaseAgeExclude:
   - '@vitejs/plugin-react@6.2.1'
   - '@vitest/mocker@5.1.0'

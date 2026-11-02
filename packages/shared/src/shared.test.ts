@@ -132,8 +132,8 @@ describe("family rules", () => {
       frozen: false,
       hardLimits: {
         settlementAccountId: "earmark-settle.near",
-        monthlyBudgetUsdcAtomic: "62000000",
-        approvalThresholdUsdcAtomic: "30000000",
+        monthlyBudgetUsd: "62",
+        perTransactionMaxUsdcAtomic: "30000000",
       },
       approvalAboveNgnKobo: 5_000_000,
       updatedAt: now,

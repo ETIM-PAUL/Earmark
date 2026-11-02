@@ -8,12 +8,14 @@ Send money home with rules. Someone abroad funds a family account from any chain
 
 | Path                 | What it is                                                                  |
 | -------------------- | --------------------------------------------------------------------------- |
+| `packages/config`    | Validated environment config per provider; errors never echo secret values  |
 | `packages/shared`    | Order, rule and receipt objects every part of the system agrees on          |
 | `contracts/receipts` | NEAR contract holding on-chain receipts, with no personal data              |
 | `services/orders`    | Order service: rule checks, the order lifecycle, refunds and reconciliation |
 | `services/billers`   | Biller service: VTpass purchases, naira quotes and the float guard          |
 | `bot`                | Telegram and WhatsApp assistant on NEAR AI Cloud                            |
 | `apps/sender-web`    | Sender web app: rules, top-ups, receipts feed and approvals                 |
+| `scripts`            | Operational scripts, including the account and key smoke check              |
 
 ## Build and test
 
@@ -27,6 +29,12 @@ pnpm lint
 ```
 
 Copy `.env.example` to `.env` for local configuration. Keys are never committed.
+
+Check that every account and key works (read-only; moves no money):
+
+```sh
+pnpm check:accounts
+```
 
 ## Privacy
 
