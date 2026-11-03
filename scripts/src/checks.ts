@@ -136,7 +136,7 @@ export async function checkNear(ctx: Ctx): Promise<CheckResult[]> {
 
 export async function checkAgentApi(ctx: Ctx): Promise<CheckResult[]> {
   const name = "agent api";
-  const baseUrl = ctx.env.NEAR_INTENTS_AGENT_API_URL || "https://api.agentsonintents.com";
+  const baseUrl = ctx.env.NEAR_INTENTS_AGENT_API_URL || "https://api.demo.agentsonintents.com";
   return guarded(name, [ctx.env.NEAR_INTENTS_AGENT_API_KEY], async () => {
     const [, net] = await getJson(ctx, `${baseUrl}/v1/network`);
     const n = net as {

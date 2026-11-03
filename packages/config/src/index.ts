@@ -24,7 +24,7 @@ export const nearEnv = z.object({
 
 export const agentApiEnv = z.object({
   NEAR_INTENTS_AGENT_API_KEY: z.string().startsWith("naa_", "must start with naa_"),
-  NEAR_INTENTS_AGENT_API_URL: z.url().default("https://api.agentsonintents.com"),
+  NEAR_INTENTS_AGENT_API_URL: z.url().default("https://api.demo.agentsonintents.com"),
 });
 
 /**
