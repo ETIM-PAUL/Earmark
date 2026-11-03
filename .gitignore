@@ -10,6 +10,9 @@ coverage/
 target/
 *.wasm
 
+# Local spike state: holds grant tokens
+.earmark/
+
 # Secrets: never commit keys
 .env
 .env.*

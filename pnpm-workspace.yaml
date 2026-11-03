@@ -4,6 +4,8 @@ packages:
   - bot
   - apps/*
   - scripts
+allowBuilds:
+  esbuild: true
 minimumReleaseAgeExclude:
   - '@vitejs/plugin-react@6.2.1'
   - '@vitest/mocker@5.1.0'

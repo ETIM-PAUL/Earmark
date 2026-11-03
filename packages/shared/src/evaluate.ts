@@ -6,8 +6,13 @@ import { normalizeCustomerRef } from "./privacy.js";
 import type { FamilyRules } from "./rules.js";
 
 /**
- * What a family has already spent this month, from fulfilled orders plus
- * orders whose money is in flight. Months follow Lagos time.
+ * What a family has already spent this month.
+ *
+ * - spentNgnKoboByCategory: from our own orders (fulfilled plus money in
+ *   flight), by Lagos calendar month.
+ * - spentUsdcAtomic: read from the Agent API (getPolicy().usage.budget
+ *   .monthly.spent_usd). The API's budget period starts when the cap was
+ *   switched on, not on the 1st, so never compute this one ourselves.
  */
 export interface MonthUsage {
   /** YYYYMM in Lagos time, from lagosMonth(). */

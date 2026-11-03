@@ -27,6 +27,15 @@ export const agentApiEnv = z.object({
   NEAR_INTENTS_AGENT_API_URL: z.url().default("https://api.agentsonintents.com"),
 });
 
+/**
+ * A dedicated low-value NEAR owner whose key the backend holds, for the
+ * Agent API spike and dev tests only. Real senders sign in their own wallet.
+ */
+export const devOwnerEnv = z.object({
+  DEV_OWNER_ACCOUNT_ID: accountId,
+  DEV_OWNER_PRIVATE_KEY: z.string().startsWith("ed25519:", "must be an ed25519:... private key"),
+});
+
 export const oneClickEnv = z.object({
   ONECLICK_API_URL: z.url().default("https://1click.chaindefuser.com"),
   /** Optional partner JWT. Without it a 0.2% fee applies. */
