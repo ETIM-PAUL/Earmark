@@ -5,8 +5,8 @@ import { NgnKobo, UsdcAtomic } from "./money.js";
 import { CustomerRefHash } from "./privacy.js";
 
 /**
- * Every status an order can hold. Allowed transitions between them are
- * defined in Phase 3; pods should not invent new statuses.
+ * Every status an order can hold. Allowed transitions are in lifecycle.ts;
+ * pods must not invent new statuses.
  */
 export const OrderStatus = z.enum([
   "draft", // the bot is still collecting fields
@@ -18,7 +18,7 @@ export const OrderStatus = z.enum([
   "purchasing", // biller call in flight (VTpass, or Flutterwave as backup)
   "fulfilled", // bill paid, token saved, receipt written
   "declined", // the sender declined the approval request
-  "rejected", // a rule refused it: frozen, budget used up, category off
+  "rejected", // a hard rule refused it: frozen, monthly budget, per-payment max
   "expired", // the quote or the approval request timed out
   "cancelled", // the recipient said no before paying
   "failed", // the biller failed after we were paid
