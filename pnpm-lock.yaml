@@ -239,6 +239,9 @@ importers:
       '@earmark/agent-api':
         specifier: workspace:*
         version: link:../packages/agent-api
+      '@earmark/billers':
+        specifier: workspace:*
+        version: link:../services/billers
       '@earmark/config':
         specifier: workspace:*
         version: link:../packages/config
@@ -258,6 +261,9 @@ importers:
 
   services/billers:
     dependencies:
+      '@earmark/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@earmark/shared':
         specifier: workspace:*
         version: link:../../packages/shared

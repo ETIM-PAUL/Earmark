@@ -2,18 +2,20 @@
   "name": "@earmark/scripts",
   "version": "0.1.0",
   "private": true,
-  "description": "Operational scripts: account and key smoke checks",
+  "description": "Operational scripts: account and key smoke checks, integration spikes",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "check:accounts": "tsx src/check-accounts.ts",
-    "spike:agent-api": "tsx src/spike/agent-api.ts"
+    "spike:agent-api": "tsx src/spike/agent-api.ts",
+    "spike:vtpass": "tsx src/spike/vtpass.ts"
   },
   "dependencies": {
-    "@earmark/config": "workspace:*",
     "@earmark/agent-api": "workspace:*",
+    "@earmark/billers": "workspace:*",
+    "@earmark/config": "workspace:*",
     "@earmark/shared": "workspace:*",
     "@near-intents-agent-api/sdk": "0.7.3",
     "near-api-js": "7.4.0"
