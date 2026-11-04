@@ -31,7 +31,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: contracts
+      # near-sdk only uses the real host functions when built by cargo-near
+      # (--cfg near). A plain cargo wasm deploys, but its errors are unreadable.
+      - name: Install cargo-near
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/download/cargo-near-v0.22.0/cargo-near-installer.sh | sh
       - run: cargo fmt --manifest-path contracts/Cargo.toml --check
       - run: cargo clippy --manifest-path contracts/Cargo.toml --all-targets -- -D warnings
-      - run: cargo test --manifest-path contracts/Cargo.toml
-      - run: cargo build --manifest-path contracts/Cargo.toml --target wasm32-unknown-unknown --release
+      - run: cargo near build non-reproducible-wasm --manifest-path contracts/receipts/Cargo.toml
+      - name: Unit and near-workspaces sandbox tests
+        run: cargo test --manifest-path contracts/Cargo.toml
+        env:
+          RECEIPTS_WASM: ${{ github.workspace }}/contracts/target/near/earmark_receipts/earmark_receipts.wasm

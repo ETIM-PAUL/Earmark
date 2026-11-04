@@ -20,12 +20,12 @@ Send money home with rules. Someone abroad funds a family account from any chain
 
 ## Build and test
 
-Requirements: Node 24+ (`nvm use`), pnpm 12, and Rust stable with the `wasm32-unknown-unknown` target.
+Requirements: Node 24+ (`nvm use`), pnpm 12, Rust stable with the `wasm32-unknown-unknown` target, and [cargo-near](https://github.com/near/cargo-near) 0.22 (`cargo install --locked cargo-near`). The contract must be built with cargo-near: a plain `cargo build` wasm deploys but cannot report its errors.
 
 ```sh
 pnpm install
-pnpm build   # TypeScript packages, the web app and the contract wasm
-pnpm test    # vitest and cargo tests
+pnpm build   # TypeScript packages, the web app and the contract wasm (cargo near)
+pnpm test    # vitest, contract unit tests and near-workspaces sandbox tests
 pnpm lint
 ```
 
@@ -41,6 +41,14 @@ Agent API spike (Phase 4). Without `SPIKE_ALLOW_WRITES=true` it runs read-only p
 
 ```sh
 pnpm spike:agent-api
+```
+
+Receipts contract on NEAR testnet (free faucet accounts, keys kept in `.earmark/`). It deploys, writes one smoke receipt and prints its page link:
+
+```sh
+pnpm build:contracts
+pnpm deploy:receipts:testnet
+pnpm --filter @earmark/sender-web dev   # then open the printed receipt.html link
 ```
 
 ## Privacy
