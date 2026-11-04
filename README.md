@@ -51,6 +51,12 @@ pnpm deploy:receipts:testnet
 pnpm --filter @earmark/sender-web dev   # then open the printed receipt.html link
 ```
 
+Biller drill (Phase 9). Runs 20 paid orders through the order executor: real VTpass sandbox purchases, live NGN/USD quotes, the float guard and on-chain receipts on the testnet contract. Two orders are forced to fail and must refund. The payment into settlement and the refund are simulated until the money flow (Phase 8) lands. Takes about 15 minutes: VTpass refuses a repeat bill for the same number within 30 seconds, so bills for the sandbox's single test phone number queue one behind another:
+
+```sh
+pnpm drill:billers   # needs pnpm deploy:receipts:testnet first; report in .earmark/
+```
+
 ## Privacy
 
 Names, phone numbers and meter numbers never go on-chain. Each receipt carries an HMAC-SHA256 of the customer reference, keyed by a per-family secret that stays in our database.

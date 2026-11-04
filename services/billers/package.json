@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@earmark/config": "workspace:*",
-    "@earmark/shared": "workspace:*"
+    "@earmark/shared": "workspace:*",
+    "near-api-js": "7.4.0"
   }
 }

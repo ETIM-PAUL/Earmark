@@ -85,6 +85,8 @@ export const Order = z
     paymentTxHash: z.string().optional(),
     fulfillment: Fulfillment.optional(),
     refundTxHash: z.string().optional(),
+    /** Transaction that wrote the on-chain receipt. Unset means the receipt is still owed. */
+    receiptTxHash: z.string().optional(),
     /** Plain-language reason, safe to show the recipient. */
     failureReason: z.string().optional(),
     createdAt: z.iso.datetime(),

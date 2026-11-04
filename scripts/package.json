@@ -11,7 +11,8 @@
     "check:accounts": "tsx src/check-accounts.ts",
     "spike:agent-api": "tsx src/spike/agent-api.ts",
     "spike:vtpass": "tsx src/spike/vtpass.ts",
-    "deploy:receipts:testnet": "tsx src/deploy-receipts.ts"
+    "deploy:receipts:testnet": "tsx src/deploy-receipts.ts",
+    "drill:billers": "tsx src/drill/billers.ts"
   },
   "dependencies": {
     "@earmark/agent-api": "workspace:*",

@@ -58,6 +58,14 @@ export const vtpassEnv = z.object({
   VTPASS_SECRET_KEY: z.string().min(1),
 });
 
+/** Biller service knobs. Defaults suit the pilot. */
+export const billersEnv = z.object({
+  /** Our margin on the NGN/USD rate, in basis points. 150 = 1.5%. */
+  QUOTE_SPREAD_BPS: z.coerce.number().int().min(0).max(1_000).default(150),
+  /** New orders stop when the VTpass wallet would drop below this, in naira. */
+  VTPASS_FLOAT_FLOOR_NGN: z.coerce.number().int().min(0).default(50_000),
+});
+
 export const telegramEnv = z.object({
   TELEGRAM_BOT_TOKEN: z.string().regex(/^\d+:[\w-]+$/, "must look like 123456:ABC-..."),
 });

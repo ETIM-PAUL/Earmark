@@ -13,7 +13,7 @@ export interface BillerMessage {
   alert: boolean;
 }
 
-const COMING_BACK = "Your money is coming back to your account.";
+export const COMING_BACK = "Your money is coming back to your account.";
 
 const TABLE: Record<string, Omit<BillerMessage, "code">> = {
   "010": {
