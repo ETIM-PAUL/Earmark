@@ -21,7 +21,9 @@
     "spike:agent-api": "pnpm --filter @earmark/scripts spike:agent-api",
     "spike:vtpass": "pnpm --filter @earmark/scripts spike:vtpass",
     "deploy:receipts:testnet": "pnpm --filter @earmark/scripts deploy:receipts:testnet",
-    "drill:billers": "pnpm --filter @earmark/scripts drill:billers"
+    "drill:billers": "pnpm --filter @earmark/scripts drill:billers",
+    "eval:bot": "pnpm --filter @earmark/scripts eval:bot",
+    "start:bot": "pnpm --filter @earmark/bot start"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",

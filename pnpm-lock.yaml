@@ -206,9 +206,21 @@ importers:
 
   bot:
     dependencies:
+      '@earmark/billers':
+        specifier: workspace:*
+        version: link:../services/billers
+      '@earmark/config':
+        specifier: workspace:*
+        version: link:../packages/config
       '@earmark/shared':
         specifier: workspace:*
         version: link:../packages/shared
+      near-api-js:
+        specifier: 7.4.0
+        version: 7.4.0
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   packages/agent-api:
     dependencies:
@@ -242,6 +254,9 @@ importers:
       '@earmark/billers':
         specifier: workspace:*
         version: link:../services/billers
+      '@earmark/bot':
+        specifier: workspace:*
+        version: link:../bot
       '@earmark/config':
         specifier: workspace:*
         version: link:../packages/config

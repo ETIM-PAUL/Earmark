@@ -136,6 +136,15 @@ describe("buildPayRequest", () => {
       reason({ category: "electricity", billerCode: "ikeja-electric", variationCode: "x" }),
     ).toBe("bad_meter_type");
     expect(reason({ orderId: "not-an-order" })).toBe("bad_order_id");
+    // Data is priced by bundle, and some bundles cost kobo (Airtel ₦49.99).
+    expect(
+      reason({
+        category: "data",
+        billerCode: "airtel-data",
+        variationCode: "airt-50",
+        amountNgnKobo: 4_999,
+      }),
+    ).toBe("accepted");
   });
 
   it("refuses an order ID from yesterday, because VTpass would answer 085", () => {

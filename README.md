@@ -57,6 +57,15 @@ Biller drill (Phase 9). Runs 20 paid orders through the order executor: real VTp
 pnpm drill:billers   # needs pnpm deploy:receipts:testnet first; report in .earmark/
 ```
 
+The assistant (Phase 10): Telegram and WhatsApp in front of a NEAR AI Cloud model. The model only reads each message into fields; the biller, the number checks, the price, the YES and every rule check are code. In demo mode each chat gets its own demo family wired to the VTpass sandbox test meter, smartcard and phone, and a YES really buys in the sandbox and writes a testnet receipt. The payment into settlement is simulated until Phase 8:
+
+```sh
+pnpm build && pnpm start:bot   # then message the bot on Telegram, e.g. "abeg buy 5k light for my meter"
+pnpm eval:bot                  # 15 English and Pidgin phrasings through the real model
+```
+
+For WhatsApp, run a tunnel to `BOT_PORT`, set `BOT_PUBLIC_URL` to it, and set `<BOT_PUBLIC_URL>/webhooks/whatsapp` as the Twilio sandbox's incoming-message URL.
+
 ## Privacy
 
 Names, phone numbers and meter numbers never go on-chain. Each receipt carries an HMAC-SHA256 of the customer reference, keyed by a per-family secret that stays in our database.

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Telegram and WhatsApp assistant on NEAR AI Cloud",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/lib.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,6 +12,17 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@earmark/shared": "workspace:*"
+    "@earmark/billers": "workspace:*",
+    "@earmark/config": "workspace:*",
+    "@earmark/shared": "workspace:*",
+    "near-api-js": "7.4.0",
+    "zod": "4.6.7"
+  },
+  "types": "./dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    }
   }
 }

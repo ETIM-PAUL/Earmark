@@ -12,7 +12,8 @@
     "spike:agent-api": "tsx src/spike/agent-api.ts",
     "spike:vtpass": "tsx src/spike/vtpass.ts",
     "deploy:receipts:testnet": "tsx src/deploy-receipts.ts",
-    "drill:billers": "tsx src/drill/billers.ts"
+    "drill:billers": "tsx src/drill/billers.ts",
+    "eval:bot": "tsx src/eval/bot.ts"
   },
   "dependencies": {
     "@earmark/agent-api": "workspace:*",
@@ -20,7 +21,8 @@
     "@earmark/config": "workspace:*",
     "@earmark/shared": "workspace:*",
     "@near-intents-agent-api/sdk": "0.7.3",
-    "near-api-js": "7.4.0"
+    "near-api-js": "7.4.0",
+    "@earmark/bot": "workspace:*"
   },
   "devDependencies": {
     "tsx": "4.23.15"

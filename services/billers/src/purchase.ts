@@ -77,7 +77,14 @@ export function buildPayRequest(p: BillPurchase, now: Date = new Date()): PayReq
       `${p.billerCode} is not a ${p.category} biller we sell`,
     );
   }
-  if (!Number.isSafeInteger(p.amountNgnKobo) || p.amountNgnKobo <= 0 || p.amountNgnKobo % 100) {
+  // Airtime and electricity take whole naira. Data and TV are priced by
+  // variation, and some cost kobo (Airtel's ₦49.99 bundle).
+  const priced = p.category === "data" || p.category === "tv";
+  if (
+    !Number.isSafeInteger(p.amountNgnKobo) ||
+    p.amountNgnKobo <= 0 ||
+    (!priced && p.amountNgnKobo % 100)
+  ) {
     throw new PurchaseInputError("bad_amount", "amount must be a positive whole naira amount");
   }
   const amount = p.amountNgnKobo / 100;
