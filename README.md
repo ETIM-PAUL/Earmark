@@ -60,8 +60,15 @@ pnpm drill:billers   # needs pnpm deploy:receipts:testnet first; report in .earm
 The assistant (Phase 10): Telegram and WhatsApp in front of a NEAR AI Cloud model. The model only reads each message into fields; the biller, the number checks, the price, the YES and every rule check are code. In demo mode each chat gets its own demo family wired to the VTpass sandbox test meter, smartcard and phone, and a YES really buys in the sandbox and writes a testnet receipt. The payment into settlement is simulated until Phase 8:
 
 ```sh
-pnpm build && pnpm start:bot   # then message the bot on Telegram, e.g. "abeg buy 5k light for my meter"
+pnpm build && pnpm start:bot   # prints an invite link for a demo family, and its judge view
 pnpm eval:bot                  # 15 English and Pidgin phrasings through the real model
+```
+
+Recipient flow and public receipts (Phase 13). The recipient opens the invite link (`t.me/<bot>?start=<code>`, or `start <code>` on WhatsApp) and the chat is connected to the family. Each payment gets a public page with the amount, bill type, time and on-chain transaction, and no names, phone numbers, meter numbers or tokens. The page checks the transaction against the chain itself. The judge view shows one family in three panes: the sender's app, the recipient's chat (long numbers masked) and the chain:
+
+```sh
+pnpm --filter @earmark/sender-web dev   # serves receipt.html and judge.html on :5173
+pnpm drill:recipient                    # one message → sandbox purchase → receipt on the page, timed
 ```
 
 For WhatsApp, run a tunnel to `BOT_PORT`, set `BOT_PUBLIC_URL` to it, and set `<BOT_PUBLIC_URL>/webhooks/whatsapp` as the Twilio sandbox's incoming-message URL.

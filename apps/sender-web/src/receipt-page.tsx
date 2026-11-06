@@ -1,84 +1,126 @@
-import { formatNaira, formatUsdc, type Receipt } from "@earmark/shared";
+import type { Receipt } from "@earmark/shared";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { EXPLORER, getReceipt, type Network } from "./receipts.js";
+import { ReceiptCard, S } from "./receipt-card.js";
+import {
+  EXPLORER,
+  getFamilyReceipts,
+  getReceipt,
+  parseNetwork,
+  type TxCheck,
+  verifyReceiptTx,
+} from "./receipts.js";
 
-// Stub public receipts page (Phase 7). Phase 13 turns it into the real
-// page per payment. It shows only what the contract holds: no names, no
-// phone or meter numbers, no electricity token.
+// Public receipts page. Reads straight from the receipts contract; no
+// backend, no sign-in.
 //
-//   /receipt.html?order=<order id>[&contract=<account>][&network=testnet|mainnet]
+//   /receipt.html?order=<id>[&tx=<hash>]   one payment, with its on-chain proof
+//   /receipt.html?family=<fam_…>           a family's receipts, live
+//
+// Both take &contract=<account> and &network=testnet|mainnet, or fall back
+// to VITE_RECEIPTS_CONTRACT_ID and VITE_NEAR_NETWORK.
 
 const params = new URLSearchParams(location.search);
-const network: Network =
-  (params.get("network") ?? import.meta.env.VITE_NEAR_NETWORK) === "mainnet"
-    ? "mainnet"
-    : "testnet";
+const network = parseNetwork(params.get("network") ?? import.meta.env.VITE_NEAR_NETWORK);
 const contractId = params.get("contract") ?? import.meta.env.VITE_RECEIPTS_CONTRACT_ID ?? "";
 const orderId = params.get("order") ?? "";
+const txHash = params.get("tx");
+const familyId = params.get("family") ?? "";
 
-const CATEGORY_LABEL: Record<Receipt["category"], string> = {
-  electricity: "Electricity",
-  airtime: "Airtime",
-  data: "Data",
-  tv: "TV",
-};
+/** New receipts show up within one poll of being written. */
+const POLL_MS = 3_000;
 
-type State =
-  | { kind: "loading" }
-  | { kind: "found"; receipt: Receipt }
-  | { kind: "missing" }
-  | { kind: "error"; message: string };
-
-function ReceiptPage() {
-  const [state, setState] = useState<State>({ kind: "loading" });
-
+function usePoll<T>(load: () => Promise<T>, done: (v: T) => boolean) {
+  const [state, setState] = useState<{ value?: T; error?: string }>({});
   useEffect(() => {
-    if (!contractId || !orderId) {
-      setState({ kind: "error", message: "Add ?order=… (and ?contract=… if not configured)." });
-      return;
-    }
-    getReceipt(network, contractId, orderId)
-      .then((receipt) => setState(receipt ? { kind: "found", receipt } : { kind: "missing" }))
-      .catch((e: unknown) => setState({ kind: "error", message: String(e) }));
-  }, []);
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      try {
+        const value = await load();
+        if (stop) return;
+        setState({ value });
+        if (done(value)) return;
+      } catch (e) {
+        if (!stop) setState((s) => ({ ...s, error: String(e) }));
+      }
+      timer = setTimeout(tick, POLL_MS);
+    };
+    void tick();
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
+  }, [load, done]);
+  return state;
+}
 
+const loadOne = () => getReceipt(network, contractId, orderId);
+const oneDone = (r: Receipt | null) => r !== null;
+
+function OnePayment() {
+  const { value, error } = usePoll(loadOne, oneDone);
+  const [check, setCheck] = useState<TxCheck | "checking" | null>(null);
+  useEffect(() => {
+    if (!value || !txHash) return;
+    setCheck("checking");
+    verifyReceiptTx(network, contractId, txHash, value.orderId)
+      .then(setCheck)
+      .catch((e) => setCheck({ verified: false, why: String(e) }));
+  }, [value]);
+
+  if (value) return <ReceiptCard r={value} network={network} txHash={txHash} check={check} />;
+  if (error && value === undefined) return <p role="alert">{error}</p>;
+  if (value === undefined) return <p>Reading the receipt from NEAR {network}…</p>;
+  return <p>No receipt for order {orderId} yet. This page checks again every few seconds.</p>;
+}
+
+const loadFamily = () => getFamilyReceipts(network, contractId, familyId);
+const never = () => false;
+
+function FamilyFeed() {
+  const { value, error } = usePoll(loadFamily, never);
+  if (error && !value) return <p role="alert">{error}</p>;
+  if (!value) return <p>Reading receipts from NEAR {network}…</p>;
+  if (value.length === 0) return <p>No receipts yet. New ones appear here by themselves.</p>;
   return (
-    <main
-      style={{ fontFamily: "system-ui, sans-serif", maxWidth: 480, margin: "0 auto", padding: 16 }}
-    >
-      <h1>Earmark receipt</h1>
-      {state.kind === "loading" && <p>Reading the receipt from NEAR {network}…</p>}
-      {state.kind === "missing" && <p>No receipt for order {orderId} yet.</p>}
-      {state.kind === "error" && <p role="alert">{state.message}</p>}
-      {state.kind === "found" && <ReceiptCard r={state.receipt} />}
-      <p style={{ color: "#666", fontSize: 14 }}>
-        Contract{" "}
-        <a href={`${EXPLORER[network]}/address/${contractId}`}>{contractId || "(not set)"}</a> on{" "}
-        {network}. Names, phone and meter numbers are never on-chain.
-      </p>
-    </main>
+    <div style={{ display: "grid", gap: 12 }}>
+      {value.map((r) => (
+        <ReceiptCard key={r.orderId} r={r} network={network} compact />
+      ))}
+    </div>
   );
 }
 
-function ReceiptCard({ r }: { r: Receipt }) {
-  const rows: [string, string][] = [
-    ["Bill", CATEGORY_LABEL[r.category]],
-    ["Amount", `${formatNaira(r.amountNgnKobo)} (${formatUsdc(r.amountUsdcAtomic)} USDC)`],
-    ["Status", r.status === "fulfilled" ? "Paid" : "Refunded to the family"],
-    ["Recorded", new Date(r.recordedAtMs).toLocaleString("en-GB", { timeZone: "Africa/Lagos" })],
-    ["Order", r.orderId],
-    ["Family", r.familyId],
-  ];
+function Page() {
+  const body = !contractId ? (
+    <p role="alert">Add ?contract=… to the link.</p>
+  ) : orderId ? (
+    <OnePayment />
+  ) : familyId ? (
+    <FamilyFeed />
+  ) : (
+    <p role="alert">Add ?order=… or ?family=… to the link.</p>
+  );
   return (
-    <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "8px 16px" }}>
-      {rows.map(([k, v]) => (
-        <div key={k} style={{ display: "contents" }}>
-          <dt style={{ color: "#666" }}>{k}</dt>
-          <dd style={{ margin: 0, overflowWrap: "anywhere" }}>{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <main
+      style={{
+        fontFamily: "system-ui, sans-serif",
+        maxWidth: 480,
+        margin: "0 auto",
+        padding: 16,
+        background: "#fafafa",
+        minHeight: "100vh",
+      }}
+    >
+      <h1 style={{ fontSize: 20 }}>Earmark {orderId ? "receipt" : "receipts"}</h1>
+      {body}
+      <p style={{ ...S.muted, marginTop: 24 }}>
+        Read live from contract{" "}
+        <a href={`${EXPLORER[network]}/address/${contractId}`}>{contractId || "(not set)"}</a> on
+        NEAR {network}. Names, phone numbers, meter numbers and tokens are never on-chain.
+      </p>
+    </main>
   );
 }
 
@@ -86,6 +128,6 @@ const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
 createRoot(root).render(
   <StrictMode>
-    <ReceiptPage />
+    <Page />
   </StrictMode>,
 );

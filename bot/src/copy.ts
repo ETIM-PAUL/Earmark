@@ -102,6 +102,14 @@ export const COPY = {
     "Sorry, network dey worry me. Abeg try again small time.",
   ),
   textOnly: t("Please send text messages only.", "Abeg na text message only."),
+  connected: t(
+    "Welcome! This chat is now connected to {sender}'s family account.",
+    "You don land! This chat don connect to {sender} family account.",
+  ),
+  inviteBad: t(
+    "That invite link doesn't work any more. Ask the person who sends you money for a new one.",
+    "That invite link no dey work again. Ask the person wey dey send you money make e send new one.",
+  ),
   notConnected: t(
     "This chat isn't connected to a family account yet. Ask the person who sends you money for your invite link.",
     "This chat never connect to family account. Ask the person wey dey send you money for the invite link.",

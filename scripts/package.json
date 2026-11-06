@@ -13,7 +13,8 @@
     "spike:vtpass": "tsx src/spike/vtpass.ts",
     "deploy:receipts:testnet": "tsx src/deploy-receipts.ts",
     "drill:billers": "tsx src/drill/billers.ts",
-    "eval:bot": "tsx src/eval/bot.ts"
+    "eval:bot": "tsx src/eval/bot.ts",
+    "drill:recipient": "tsx src/drill/recipient.ts"
   },
   "dependencies": {
     "@earmark/agent-api": "workspace:*",

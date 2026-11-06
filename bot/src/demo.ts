@@ -31,8 +31,9 @@ import { isPlainDataBundle, type Option } from "./variations.js";
  * executor and receipts on the testnet contract. Simulated: the family's
  * transfer to settlement and the refund, and the sender's approval card.
  *
- * Every chat gets its own demo family, wired to the VTpass sandbox's test
- * meter, smartcard and phone. Refuses to run against live VTpass.
+ * Each demo family is wired to the VTpass sandbox's test meter, smartcard
+ * and phone; a chat joins one through its invite link. Refuses to run
+ * against live VTpass.
  */
 
 export interface DemoConfig {
@@ -42,6 +43,8 @@ export interface DemoConfig {
   model: ChatModel;
   /** .earmark/receipts-testnet.json from pnpm deploy:receipts:testnet, if present. */
   testnetStateFile: string;
+  /** e.g. http://localhost:5173/receipt.html */
+  receiptsPageUrl: string;
   /** Tells a chat that its order moved. */
   onOrderUpdate: (order: Order) => void;
 }
@@ -76,6 +79,9 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
   ports: BotPorts;
   executor: OrderExecutor;
   receiptLink: (o: Order) => string | null;
+  createFamily: (senderName?: string) => Family;
+  connect: (chat: string, familyId: string) => boolean;
+  contractId: string | null;
 }> {
   if (!cfg.vtpass.baseUrl.includes("sandbox")) {
     throw new Error("demo mode runs against the VTpass sandbox only");
@@ -110,6 +116,43 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
   }
 
   const families = new Map<string, Family>();
+  /** chat → familyId, set when the recipient opens their invite link. */
+  const chats = new Map<string, string>();
+
+  /** A demo family on the VTpass sandbox's test meter, smartcard and phone. */
+  const createFamily = (senderName = "Ada"): Family => {
+    const familyId = newFamilyId();
+    const at = new Date();
+    const f: Family = {
+      familyId,
+      salt: newFamilySalt(),
+      senderName,
+      recipientPhone: SANDBOX.phone,
+      saved: [
+        {
+          category: "electricity",
+          billerCode: "ikeja-electric",
+          ref: SANDBOX.meter,
+          label: "home meter",
+          meterType: "prepaid",
+        },
+        { category: "tv", billerCode: "dstv", ref: SANDBOX.smartcard, label: "house DStv" },
+      ],
+      rules: demoRules(familyId, at),
+      usage: {
+        month: lagosMonth(at),
+        spentNgnKoboByCategory: { electricity: 0, airtime: 0, data: 0, tv: 0 },
+        spentUsdcAtomic: "0",
+      },
+    };
+    families.set(familyId, f);
+    return f;
+  };
+  const connect = (chat: string, familyId: string): boolean => {
+    if (!families.has(familyId)) return false;
+    chats.set(chat, familyId);
+    return true;
+  };
   const executor = new OrderExecutor({
     store,
     vtpass,
@@ -143,34 +186,9 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
   const ports: BotPorts = {
     model: cfg.model,
     family: async (chat) => {
-      let f = families.get(chat);
-      if (!f) {
-        const familyId = newFamilyId();
-        const at = new Date();
-        f = {
-          familyId,
-          salt: newFamilySalt(),
-          senderName: "Ada",
-          recipientPhone: SANDBOX.phone,
-          saved: [
-            {
-              category: "electricity",
-              billerCode: "ikeja-electric",
-              ref: SANDBOX.meter,
-              label: "home meter",
-              meterType: "prepaid",
-            },
-            { category: "tv", billerCode: "dstv", ref: SANDBOX.smartcard, label: "house DStv" },
-          ],
-          rules: demoRules(familyId, at),
-          usage: {
-            month: lagosMonth(at),
-            spentNgnKoboByCategory: { electricity: 0, airtime: 0, data: 0, tv: 0 },
-            spentUsdcAtomic: "0",
-          },
-        };
-        families.set(chat, f);
-      }
+      const id = chats.get(chat);
+      const f = id ? families.get(id) : undefined;
+      if (!f) return null;
       // Usage counts what's paid plus money in flight, this Lagos month.
       const month = lagosMonth();
       const counted = (await familyOrders(f.familyId)).filter(
@@ -233,9 +251,10 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
     recent: async (familyId, n) => (await familyOrders(familyId)).slice(0, n),
   };
 
+  // The public receipts page: amount, bill type, time and the on-chain proof.
   const receiptLink = (o: Order) =>
     contractId && o.receiptTxHash && !o.receiptTxHash.includes(":")
-      ? `https://testnet.nearblocks.io/txns/${o.receiptTxHash}`
+      ? `${cfg.receiptsPageUrl}?network=testnet&contract=${contractId}&order=${o.id}&tx=${o.receiptTxHash}`
       : null;
   ports.receiptLink = receiptLink;
 
@@ -244,5 +263,5 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
     executor.sweep().catch((e) => console.error(`sweep failed: ${String(e)}`));
   }, 15_000).unref();
 
-  return { ports, executor, receiptLink };
+  return { ports, executor, receiptLink, createFamily, connect, contractId };
 }

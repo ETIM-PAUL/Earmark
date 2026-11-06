@@ -16,6 +16,7 @@ import {
 import { type Lang, say } from "./copy.js";
 import { type Extraction, extract } from "./extract.js";
 import type { ChatModel } from "./model.js";
+import { localize } from "./pidgin.js";
 import {
   LABELS,
   maskRef,
@@ -346,9 +347,9 @@ export class Dialog {
       if (!found.ok) {
         if (found.reason === "not_found") {
           d.customerRef = undefined;
-          return this.ask(s, "customerRef", found.recipient);
+          return this.ask(s, "customerRef", localize(found.recipient, lang));
         }
-        return this.reply(s, found.recipient);
+        return this.reply(s, localize(found.recipient, lang));
       }
       d.customerName = found.customerName ?? "";
     }
@@ -357,7 +358,8 @@ export class Dialog {
     try {
       quote = await this.ports.quote(d.amountNgnKobo as number);
     } catch (e) {
-      const msg = (e as { recipient?: string }).recipient ?? say(lang, "busy");
+      const r = (e as { recipient?: string }).recipient;
+      const msg = r ? localize(r, lang) : say(lang, "busy");
       return this.reply(s, msg);
     }
 
@@ -428,6 +430,7 @@ export class Dialog {
       reply = say(lang, "paying");
     } else if (verdict.outcome === "needs_approval") {
       const why = verdict.breaches.map((b) => b.message).join(" ");
+      const whyLocal = localize(why, lang);
       order = advance(
         order,
         "awaiting_approval",
@@ -436,14 +439,14 @@ export class Dialog {
         },
         at,
       );
-      reply = say(lang, "needsApproval", { sender: family.senderName, why });
+      reply = say(lang, "needsApproval", { sender: family.senderName, why: whyLocal });
     } else {
       const why = verdict.breaches
         .filter((b) => b.layer === "hard")
         .map((b) => b.message)
         .join(" ");
       order = advance(order, "rejected", { failureReason: why }, at);
-      reply = say(lang, "rejected", { why });
+      reply = say(lang, "rejected", { why: localize(why, lang) });
     }
     await this.ports.submit(order, family);
     return this.reply(reset(s), reply);
@@ -519,14 +522,14 @@ export function updateMessage(o: Order, lang: Lang, receiptLink: string | null):
       return lines.join("\n");
     }
     case "refunded": {
-      const lines = [o.failureReason ?? say(lang, "refunded")];
+      const lines = [o.failureReason ? localize(o.failureReason, lang) : say(lang, "refunded")];
       if (receiptLink) lines.push(say(lang, "receipt", { link: receiptLink }));
       return lines.join("\n");
     }
     case "declined":
     case "expired":
     case "rejected":
-      return o.failureReason ?? null;
+      return o.failureReason ? localize(o.failureReason, lang) : null;
     default:
       return null;
   }

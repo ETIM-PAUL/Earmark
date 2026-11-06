@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, "index.html"),
         receipt: resolve(import.meta.dirname, "receipt.html"),
+        judge: resolve(import.meta.dirname, "judge.html"),
       },
     },
   },

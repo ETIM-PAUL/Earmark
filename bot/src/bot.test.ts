@@ -481,3 +481,101 @@ describe("WhatsApp webhook signature", () => {
     });
   });
 });
+
+describe("Pidgin for every outside message", () => {
+  it("translates every biller, lookup, float, quote and executor message", async () => {
+    const billers = await import("@earmark/billers");
+    const { localize, untranslated } = await import("./pidgin.js");
+    const texts = [
+      ...billers.KNOWN_CODES.map((c) => billers.describeCode(c).recipient),
+      billers.describeCode("unknown").recipient,
+      billers.describeVerifyFailure("meter"),
+      billers.describeVerifyFailure("smartcard"),
+      new billers.QuoteUnavailableError("x").recipient,
+      "Bill payments are paused for a short while. Please try again later.",
+      "We couldn't reach the biller just now. Please try again in a minute.",
+      `This order is from yesterday, so we couldn't send it today. ${billers.COMING_BACK}`,
+      `The biller never received this payment. ${billers.COMING_BACK}`,
+    ];
+    for (const t of texts) expect(untranslated(t), t).toEqual([]);
+    expect(localize(billers.describeCode("016").recipient, "pcm")).toBe(
+      "The biller no fit finish this payment. Abeg check the number. Your money dey come back to your account.",
+    );
+    expect(localize("anything", "en")).toBe("anything");
+  });
+
+  it("translates every rule breach, amounts included", async () => {
+    const { evaluateOrder } = await import("@earmark/shared");
+    const { untranslated, localize } = await import("./pidgin.js");
+    const strict = rules({
+      frozen: true,
+      approvalAboveNgnKobo: 1_000_00,
+      hardLimits: {
+        settlementAccountId: "earmark-settle.near",
+        monthlyBudgetUsd: "100",
+        perTransactionMaxUsdcAtomic: "1000000",
+      },
+      categories: Object.fromEntries(
+        CATEGORIES.map((c) => [
+          c,
+          { enabled: false, monthlyCapNgnKobo: 100_00, allowedCustomerRefs: ["08000000000"] },
+        ]),
+      ) as FamilyRules["categories"],
+    });
+    for (const category of ["electricity", "airtime", "tv"] as const) {
+      const v = evaluateOrder(
+        {
+          category,
+          customerRef: "08031234567",
+          amountNgnKobo: 5_000_00,
+          quote: {
+            rateNgnPerUsd: "1325.00",
+            amountUsdcAtomic: "3773585",
+            quotedAt: NOW.toISOString(),
+            expiresAt: NOW.toISOString(),
+          },
+        },
+        strict,
+        {
+          month: "202611",
+          spentNgnKoboByCategory: { electricity: 0, airtime: 0, data: 0, tv: 0 },
+          spentUsdcAtomic: "99000000",
+        },
+      );
+      expect(v.outcome).toBe("reject");
+      if (v.outcome === "allow") continue;
+      expect(v.breaches).toHaveLength(7);
+      for (const b of v.breaches) expect(untranslated(b.message), b.message).toEqual([]);
+    }
+    expect(localize("Only $1.00 of the $100 monthly budget is left.", "pcm")).toBe(
+      "Na only $1.00 remain from the $100 for this month.",
+    );
+  });
+});
+
+describe("invites", () => {
+  it("connects one chat, once, within 7 days", async () => {
+    const { InviteStore, inviteCodeIn, inviteLinks } = await import("./invites.js");
+    let t = NOW.getTime();
+    const store = new InviteStore(() => new Date(t));
+    const { code } = store.create("fam_abcdefgh12345678");
+    expect(code).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(inviteCodeIn(`/start ${code}`)).toBe(code);
+    expect(inviteCodeIn(`start ${code}`)).toBe(code);
+    expect(inviteCodeIn("/start")).toBeNull();
+    expect(inviteCodeIn("start buying light")).toBeNull();
+    expect(store.redeem(code, "tg:1")).toEqual({ ok: true, familyId: "fam_abcdefgh12345678" });
+    expect(store.redeem(code, "tg:1").ok).toBe(true);
+    expect(store.redeem(code, "tg:2")).toEqual({ ok: false, reason: "used" });
+    expect(store.redeem("x".repeat(22), "tg:2")).toEqual({ ok: false, reason: "unknown" });
+    const late = store.create("fam_abcdefgh12345678").code;
+    t += 7 * 24 * 3_600_000;
+    expect(store.redeem(late, "tg:3")).toEqual({ ok: false, reason: "expired" });
+    expect(
+      inviteLinks(code, { telegramBot: "earmarked_ai_bot", whatsappNumber: "+14155238886" }),
+    ).toEqual({
+      telegram: `https://t.me/earmarked_ai_bot?start=${code}`,
+      whatsapp: `https://wa.me/14155238886?text=start%20${code}`,
+    });
+  });
+});
