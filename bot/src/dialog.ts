@@ -98,7 +98,12 @@ export interface Session {
   asking: Slot | null;
   options?: Option[] | undefined;
   pending?: Order | undefined;
+  /** The last order this chat said YES to, so a second YES isn't a second bill. */
+  lastSent?: { what: string; at: string } | undefined;
 }
+
+/** A YES this soon after a sent order is a double tap, not a new bill. */
+const DOUBLE_TAP_MS = 5 * 60 * 1000;
 
 export const newSession = (): Session => ({ lang: "en", draft: {}, asking: null });
 
@@ -141,6 +146,15 @@ export class Dialog {
     if (s.asking === "confirm" && s.pending) {
       if (isYes(text)) return this.confirm(s, family);
       if (isNo(text)) return this.reply(reset(s), say(s.lang, "cancelled"));
+    }
+    // YES with nothing showing, just after a YES: the order is already sent.
+    if (
+      !s.pending &&
+      s.lastSent &&
+      isYes(text) &&
+      this.now().getTime() - Date.parse(s.lastSent.at) < DOUBLE_TAP_MS
+    ) {
+      return this.reply(s, say(s.lang, "alreadySent", { what: s.lastSent.what }));
     }
     // A numbered list is showing and the reply is just a number: no model needed.
     const bare = text.trim().match(/^(?:number\s*|no\.?\s*|#)?(\d{1,2})[.)]?$/i);
@@ -449,7 +463,14 @@ export class Dialog {
       reply = say(lang, "rejected", { why: localize(why, lang) });
     }
     await this.ports.submit(order, family);
-    return this.reply(reset(s), reply);
+    const next = reset(s);
+    if (order.status === "approved" || order.status === "awaiting_approval") {
+      next.lastSent = {
+        what: `${CATEGORY_LABEL[order.category]} ${formatNaira(order.amountNgnKobo)}`,
+        at: at.toISOString(),
+      };
+    }
+    return this.reply(next, reply);
   }
 
   private balance(lang: Lang, family: Family): string {
@@ -555,7 +576,7 @@ const STATUS_LABEL: Partial<Record<Order["status"], string>> = {
 };
 
 function reset(s: Session): Session {
-  return { lang: s.lang, draft: {}, asking: null };
+  return { lang: s.lang, draft: {}, asking: null, ...(s.lastSent ? { lastSent: s.lastSent } : {}) };
 }
 
 function hasSlots(x: Extraction): boolean {

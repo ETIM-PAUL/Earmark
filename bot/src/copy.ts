@@ -115,6 +115,18 @@ export const COPY = {
     "This chat never connect to family account. Ask the person wey dey send you money for the invite link.",
   ),
   lookupFailed: t("{why}", "{why}"),
+  checking: t(
+    "We're checking this payment. Please don't send it again; we'll update you.",
+    "We dey check this payment. Abeg no send am again; we go update you.",
+  ),
+  alreadySent: t(
+    "That one is already on its way ({what}). I'll message you when it's done.",
+    "I don already send that one ({what}). I go message you once e done.",
+  ),
+  slowDown: t(
+    "You're sending messages too fast. Please wait a minute, then try again.",
+    "You dey send message too fast. Abeg wait one minute, then try again.",
+  ),
 } satisfies Record<string, Text>;
 
 export type CopyKey = keyof typeof COPY;

@@ -126,12 +126,22 @@ async fn receipts_end_to_end() -> anyhow::Result<()> {
     let err = record(&env, &env.service, pii).await?;
     assert!(err.unwrap_err().contains("invalid transaction reference"));
 
-    // The owner rotates the service; the old one loses write access.
+    // Rotating needs 1 yoctoNEAR, so a function-call key can't do it.
     let new_service = env.worker.dev_create_account().await?;
     let out = env
         .owner
         .call(env.contract.id(), "set_service")
         .args_json(json!({ "service": new_service.id() }))
+        .transact()
+        .await?;
+    assert!(format!("{:?}", out.into_result()).contains("exactly 1 yoctoNEAR"));
+
+    // The owner rotates the service; the old one loses write access.
+    let out = env
+        .owner
+        .call(env.contract.id(), "set_service")
+        .args_json(json!({ "service": new_service.id() }))
+        .deposit(NearToken::from_yoctonear(1))
         .transact()
         .await?
         .into_result()?;
@@ -147,6 +157,7 @@ async fn receipts_end_to_end() -> anyhow::Result<()> {
         .stranger
         .call(env.contract.id(), "set_service")
         .args_json(json!({ "service": env.stranger.id() }))
+        .deposit(NearToken::from_yoctonear(1))
         .transact()
         .await?;
     assert!(format!("{:?}", out.into_result()).contains("only the owner may change service"));

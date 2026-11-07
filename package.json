@@ -24,7 +24,9 @@
     "drill:billers": "pnpm --filter @earmark/scripts drill:billers",
     "eval:bot": "pnpm --filter @earmark/scripts eval:bot",
     "start:bot": "pnpm --filter @earmark/bot start",
-    "drill:recipient": "pnpm --filter @earmark/scripts drill:recipient"
+    "drill:recipient": "pnpm --filter @earmark/scripts drill:recipient",
+    "drill:failures": "pnpm --filter @earmark/bot exec vitest run src/drills.test.ts",
+    "audit:secrets": "pnpm --filter @earmark/scripts audit:secrets"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",

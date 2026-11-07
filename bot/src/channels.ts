@@ -5,7 +5,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * bot core serves both.
  */
 
-export type OnMessage = (chat: string, text: string | null) => Promise<void>;
+/** `id` lets the bot drop a message delivered twice. */
+export type OnMessage = (chat: string, text: string | null, id?: string) => Promise<void>;
 
 // ── Telegram: long polling, so it runs anywhere without a public URL ─────
 
@@ -58,7 +59,7 @@ export class Telegram {
           const m = u.message;
           // Private chats only: a family's bills don't belong in a group.
           if (m?.chat.type !== "private") continue;
-          onMessage(`tg:${m.chat.id}`, m.text ?? null).catch((e) =>
+          onMessage(`tg:${m.chat.id}`, m.text ?? null, `tg:${u.update_id}`).catch((e) =>
             console.error(`telegram message failed: ${String(e)}`),
           );
         }
@@ -118,11 +119,14 @@ export class WhatsApp {
   }
 
   /** The sender, as +234…, from a verified webhook. */
-  static chatOf(params: URLSearchParams): { from: string; text: string | null } | null {
+  static chatOf(
+    params: URLSearchParams,
+  ): { from: string; text: string | null; id: string | undefined } | null {
     const from = params.get("From")?.replace(/^whatsapp:/, "");
     if (!from) return null;
     const media = Number(params.get("NumMedia") ?? "0");
     const body = params.get("Body");
-    return { from, text: media > 0 && !body ? null : body };
+    const sid = params.get("MessageSid");
+    return { from, text: media > 0 && !body ? null : body, id: sid ? `wa:${sid}` : undefined };
   }
 }

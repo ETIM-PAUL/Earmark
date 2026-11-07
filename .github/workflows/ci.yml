@@ -17,7 +17,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # Key and token shapes in every committed file (no .env here, so no values).
+      - run: pnpm audit:secrets
       - run: pnpm build:ts
+      # Includes the Phase 16 failure drills (bot/src/drills.test.ts), end to end.
       - run: pnpm test:ts
 
   contracts:

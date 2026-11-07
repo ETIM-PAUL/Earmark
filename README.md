@@ -71,6 +71,16 @@ pnpm --filter @earmark/sender-web dev   # serves receipt.html and judge.html on 
 pnpm drill:recipient                    # one message → sandbox purchase → receipt on the page, timed
 ```
 
+Hardening and failure drills (Phase 16). The drills run the bot, the demo wiring, the order executor and the float guard end to end against a simulated VTpass, payer and chain, with no keys. Each one must end in a clear message plus a refund or a retry, never a lost payment. They run in CI on every push to `main`. The audit looks for secrets in every file git would commit and, locally, for every `.env` secret value in the whole git history; it prints names, never values:
+
+```sh
+pnpm drill:failures   # VTpass down, float empty, wrong meter, double YES, Agent API error, RPC down…
+pnpm audit:secrets
+curl localhost:4003/status   # orders by status, stuck orders, float and recent alerts (localhost only)
+```
+
+Set `ALERTS_TELEGRAM_CHAT_ID` to have alerts (low float, stuck orders, missing receipts, failure rate, bot errors) sent to a Telegram chat as well as the console.
+
 For WhatsApp, run a tunnel to `BOT_PORT`, set `BOT_PUBLIC_URL` to it, and set `<BOT_PUBLIC_URL>/webhooks/whatsapp` as the Twilio sandbox's incoming-message URL.
 
 ## Privacy

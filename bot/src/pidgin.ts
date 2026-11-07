@@ -44,6 +44,8 @@ const SENTENCES: Record<string, string> = {
   "This meter is not on the approved list.": "This meter no dey the approved list.",
   "This smartcard is not on the approved list.": "This smartcard no dey the approved list.",
   "This phone number is not on the approved list.": "This phone number no dey the approved list.",
+  "We couldn't move the money for this bill.": "We no fit move the money for this bill.",
+  "Nothing left the account.": "Nothing comot from the account.",
 };
 
 /** Sentences with amounts in them, from evaluateOrder. */

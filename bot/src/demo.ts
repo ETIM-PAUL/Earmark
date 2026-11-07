@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_RATE_SOURCES,
+  type ExecutorDeps,
   FloatGuard,
   lookupCustomer,
   MemoryOrderStore,
@@ -8,6 +9,7 @@ import {
   OrderExecutor,
   Quoter,
   type ReceiptWriter,
+  type Refunds,
   VtpassClient,
 } from "@earmark/billers";
 import {
@@ -34,6 +36,9 @@ import { isPlainDataBundle, type Option } from "./variations.js";
  * Each demo family is wired to the VTpass sandbox's test meter, smartcard
  * and phone; a chat joins one through its invite link. Refuses to run
  * against live VTpass.
+ *
+ * `wireDemo` takes every outside piece as a port, so the failure drills can
+ * run the same wiring against a simulated VTpass, payer and chain.
  */
 
 export interface DemoConfig {
@@ -47,6 +52,70 @@ export interface DemoConfig {
   receiptsPageUrl: string;
   /** Tells a chat that its order moved. */
   onOrderUpdate: (order: Order) => void;
+  /** Tells a chat that its order is taking a while. */
+  onOrderWaiting?: (order: Order) => void;
+  alert?: (msg: string) => void;
+}
+
+/**
+ * The family account paying settlement for one order (Phase 8, through the
+ * Agent API). Throw PaymentRefused when no money moved; any other error
+ * means "try again", and the order waits in `paying`.
+ */
+export interface Payer {
+  pay(order: Order): Promise<{ txHash: string }>;
+}
+
+export class PaymentRefused extends Error {
+  constructor(readonly detail: string) {
+    super(`payment refused: ${detail}`);
+    this.name = "PaymentRefused";
+  }
+}
+
+/** What the recipient hears when the family account can't pay settlement. */
+export const PAYMENT_REFUSED =
+  "We couldn't move the money for this bill. Nothing left the account. Please try again later.";
+
+export interface DemoDeps {
+  vtpass: VtpassClient;
+  quoter: Pick<Quoter, "quote">;
+  receipts: ReceiptWriter;
+  /** For receipt links; null when receipts aren't on-chain. */
+  contractId: string | null;
+  floatFloorNgn: number;
+  model: ChatModel;
+  receiptsPageUrl: string;
+  onOrderUpdate: (order: Order) => void;
+  onOrderWaiting?: (order: Order) => void;
+  alert?: (msg: string) => void;
+  /** Default: a simulated transfer that always lands. */
+  payer?: Payer;
+  /** Default: a simulated refund that always lands. */
+  refunds?: Refunds;
+  /** Reuse a float reading this long. Default 30 s. */
+  floatCacheMs?: number;
+  executor?: Pick<ExecutorDeps, "purchase" | "sameBillGapMs" | "unknownAfterMs">;
+  /** Run tick() on a timer this often. 0: only when called. Default 15 s. */
+  tickMs?: number;
+}
+
+export interface DemoWiring {
+  ports: BotPorts;
+  executor: OrderExecutor;
+  store: MemoryOrderStore;
+  float: FloatGuard;
+  receiptLink: (o: Order) => string | null;
+  createFamily: (senderName?: string) => Family;
+  connect: (chat: string, familyId: string) => boolean;
+  contractId: string | null;
+  /** Retry payments to settlement, then sweep the executor. */
+  tick: () => Promise<void>;
+  /** Every order, newest first. */
+  orders: () => Promise<Order[]>;
+  floorKobo: number;
+  /** Resolves when no payment or purchase is running in the background. */
+  settled: () => Promise<void>;
 }
 
 const SANDBOX = { phone: "08011111111", meter: "1111111111111", smartcard: "1212121212" };
@@ -75,25 +144,11 @@ function demoRules(familyId: string, at: Date): FamilyRules {
   };
 }
 
-export async function demoPorts(cfg: DemoConfig): Promise<{
-  ports: BotPorts;
-  executor: OrderExecutor;
-  receiptLink: (o: Order) => string | null;
-  createFamily: (senderName?: string) => Family;
-  connect: (chat: string, familyId: string) => boolean;
-  contractId: string | null;
-}> {
+/** The demo against the VTpass sandbox, live rates and the testnet contract. */
+export async function demoPorts(cfg: DemoConfig): Promise<DemoWiring> {
   if (!cfg.vtpass.baseUrl.includes("sandbox")) {
     throw new Error("demo mode runs against the VTpass sandbox only");
   }
-  const vtpass = new VtpassClient(cfg.vtpass);
-  const store = new MemoryOrderStore();
-  const quoter = new Quoter({ sources: DEFAULT_RATE_SOURCES, spreadBps: cfg.spreadBps });
-  const float = new FloatGuard({
-    balance: () => vtpass.balance(),
-    floorKobo: cfg.floatFloorNgn * 100,
-  });
-
   let receipts: ReceiptWriter;
   let contractId: string | null = null;
   try {
@@ -114,6 +169,37 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
     );
     receipts = { record: async (r) => ({ txHash: `not-recorded:${r.orderId}` }) };
   }
+  return wireDemo({
+    vtpass: new VtpassClient(cfg.vtpass),
+    quoter: new Quoter({ sources: DEFAULT_RATE_SOURCES, spreadBps: cfg.spreadBps }),
+    receipts,
+    contractId,
+    floatFloorNgn: cfg.floatFloorNgn,
+    model: cfg.model,
+    receiptsPageUrl: cfg.receiptsPageUrl,
+    onOrderUpdate: cfg.onOrderUpdate,
+    ...(cfg.onOrderWaiting ? { onOrderWaiting: cfg.onOrderWaiting } : {}),
+    ...(cfg.alert ? { alert: cfg.alert } : {}),
+  });
+}
+
+export function wireDemo(deps: DemoDeps): DemoWiring {
+  const { vtpass, quoter, receipts, contractId } = deps;
+  if (!vtpass.isSandbox) throw new Error("demo mode runs against the VTpass sandbox only");
+  const alert = deps.alert ?? ((m: string) => console.error(`ALERT ${m}`));
+  const store = new MemoryOrderStore();
+  const float = new FloatGuard({
+    balance: () => vtpass.balance(),
+    floorKobo: deps.floatFloorNgn * 100,
+    alert,
+    ...(deps.floatCacheMs !== undefined ? { cacheMs: deps.floatCacheMs } : {}),
+  });
+  const payer: Payer = deps.payer ?? { pay: async (o) => ({ txHash: `demo-pay:${o.id}` }) };
+  const inflight = new Set<Promise<unknown>>();
+  const track = (p: Promise<unknown>) => {
+    inflight.add(p);
+    void p.finally(() => inflight.delete(p)).catch(() => {});
+  };
 
   const families = new Map<string, Family>();
   /** chat → familyId, set when the recipient opens their invite link. */
@@ -158,12 +244,55 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
     vtpass,
     float,
     receipts,
-    refunds: { refund: async (o) => ({ txHash: `demo-refund:${o.id}` }) },
+    refunds: deps.refunds ?? { refund: async (o) => ({ txHash: `demo-refund:${o.id}` }) },
     contactPhone: async () => SANDBOX.phone,
-    notify: cfg.onOrderUpdate,
+    notify: deps.onOrderUpdate,
+    alert,
+    ...deps.executor,
   });
 
-  const familyOrders = async (familyId: string) =>
+  /** Tell the chat once a bill is taking a while; the update follows when it moves. */
+  const waited = (status: Order["status"], id: string) => {
+    if (status !== "purchasing" && status !== "paying") return;
+    track(
+      store
+        .get(id)
+        .then((o) => o && deps.onOrderWaiting?.(o))
+        .catch(() => {}),
+    );
+  };
+  const run = (id: string) =>
+    executor
+      .execute(id)
+      .then((r) => r.waiting && waited(r.status as Order["status"], id))
+      .catch((e) => alert(`order ${id}: executor failed: ${String(e)}`));
+
+  /**
+   * paying ─► paid, or ─► rejected when the payment is refused (no money
+   * moved). Any other error leaves it in paying for the next tick: the
+   * Agent API call is idempotent per order ID (Phase 8), so a retry can't
+   * pay twice.
+   */
+  const payOut = async (paying: Order): Promise<void> => {
+    let next: Order;
+    try {
+      const { txHash } = await payer.pay(paying);
+      next = advance(paying, "paid", { paymentTxHash: txHash });
+    } catch (e) {
+      if (!(e instanceof PaymentRefused)) {
+        alert(`order ${paying.id}: payment to settlement failed, will retry: ${String(e)}`);
+        waited("paying", paying.id);
+        return;
+      }
+      alert(`order ${paying.id}: ${e.message}`);
+      next = advance(paying, "rejected", { failureReason: PAYMENT_REFUSED });
+    }
+    if (!(await store.replace(paying, next))) return; // someone else moved it
+    deps.onOrderUpdate(next);
+    if (next.status === "paid") await run(next.id);
+  };
+
+  const allOrders = async () =>
     (
       await store.listByStatus([
         "approved",
@@ -177,14 +306,14 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
         "refunding",
         "refunded",
       ])
-    )
-      .filter((o) => o.familyId === familyId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    ).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const familyOrders = async (familyId: string) =>
+    (await allOrders()).filter((o) => o.familyId === familyId);
 
   const variationCache = new Map<string, Option[]>();
 
   const ports: BotPorts = {
-    model: cfg.model,
+    model: deps.model,
     family: async (chat) => {
       const id = chats.get(chat);
       const f = id ? families.get(id) : undefined;
@@ -240,13 +369,10 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
         return;
       }
       if (order.status !== "approved") return;
-      // Simulated Phase 8: the family account pays settlement.
+      // Phase 8 stand-in: the family account pays settlement, then the executor buys.
       const paying = advance(order, "paying");
-      const paid = advance(paying, "paid", { paymentTxHash: `demo-pay:${order.id}` });
-      store.put(paid);
-      executor
-        .execute(order.id)
-        .catch((e) => console.error(`order ${order.id}: executor failed: ${String(e)}`));
+      if (!(await store.replace(order, paying))) return;
+      track(payOut(paying).catch((e) => alert(`order ${order.id}: ${String(e)}`)));
     },
     recent: async (familyId, n) => (await familyOrders(familyId)).slice(0, n),
   };
@@ -254,14 +380,38 @@ export async function demoPorts(cfg: DemoConfig): Promise<{
   // The public receipts page: amount, bill type, time and the on-chain proof.
   const receiptLink = (o: Order) =>
     contractId && o.receiptTxHash && !o.receiptTxHash.includes(":")
-      ? `${cfg.receiptsPageUrl}?network=testnet&contract=${contractId}&order=${o.id}&tx=${o.receiptTxHash}`
+      ? `${deps.receiptsPageUrl}?network=testnet&contract=${contractId}&order=${o.id}&tx=${o.receiptTxHash}`
       : null;
   ports.receiptLink = receiptLink;
 
-  // Finish anything pending (webhook-less local runs): sweep every 15 s.
-  setInterval(() => {
-    executor.sweep().catch((e) => console.error(`sweep failed: ${String(e)}`));
-  }, 15_000).unref();
+  const tick = async () => {
+    for (const o of await store.listByStatus(["paying"])) await payOut(o);
+    for (const r of await executor.sweep())
+      if (r.waiting) waited(r.status as Order["status"], r.orderId);
+  };
 
-  return { ports, executor, receiptLink, createFamily, connect, contractId };
+  // Finish anything pending (webhook-less local runs).
+  const tickMs = deps.tickMs ?? 15_000;
+  if (tickMs > 0) {
+    setInterval(() => {
+      tick().catch((e) => alert(`tick failed: ${String(e)}`));
+    }, tickMs).unref();
+  }
+
+  return {
+    ports,
+    executor,
+    store,
+    float,
+    receiptLink,
+    createFamily,
+    connect,
+    contractId,
+    tick,
+    orders: allOrders,
+    floorKobo: deps.floatFloorNgn * 100,
+    settled: async () => {
+      while (inflight.size > 0) await Promise.allSettled([...inflight]);
+    },
+  };
 }

@@ -12,7 +12,7 @@
 
 use near_sdk::json_types::U128;
 use near_sdk::store::{LookupMap, Vector};
-use near_sdk::{env, near, require, AccountId, BorshStorageKey, PanicOnDefault};
+use near_sdk::{assert_one_yocto, env, near, require, AccountId, BorshStorageKey, PanicOnDefault};
 
 /// The most receipts one `receipts_for_family` call returns.
 pub const MAX_PAGE: u32 = 50;
@@ -191,8 +191,14 @@ impl Contract {
     }
 
     /// Owner only. Moves write access to a new service account.
+    ///
+    /// Needs exactly 1 yoctoNEAR attached, which only a full-access key can
+    /// sign: a leaked function-call key on the owner account can't take
+    /// over the receipts.
+    #[payable]
     pub fn set_service(&mut self, service: AccountId) {
         require!(env::predecessor_account_id() == self.owner, "only the owner may change service");
+        assert_one_yocto();
         let old_service = std::mem::replace(&mut self.service, service.clone());
         Event::ServiceChanged { old_service, new_service: service }.emit();
     }
@@ -239,6 +245,7 @@ mod tests {
     use super::*;
     use near_sdk::test_utils::{accounts, get_logs, VMContextBuilder};
     use near_sdk::testing_env;
+    use near_sdk::NearToken;
 
     const ORDER: &str = "202611031000abcdef123456";
     const FAMILY: &str = "fam_abcdefgh12345678";
@@ -415,13 +422,24 @@ mod tests {
     #[test]
     fn the_owner_rotates_the_service() {
         let mut c = contract();
-        as_caller(accounts(0));
+        testing_env!(VMContextBuilder::new()
+            .predecessor_account_id(accounts(0))
+            .attached_deposit(NearToken::from_yoctonear(1))
+            .build());
         c.set_service(accounts(3));
         assert_eq!(c.service(), accounts(3));
         let ev = get_logs().pop().unwrap();
         assert!(ev.contains("\"event\":\"service_changed\""), "{ev}");
         as_caller(accounts(3));
         c.record_receipt(input());
+    }
+
+    #[test]
+    #[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+    fn rotating_the_service_needs_a_full_access_key() {
+        let mut c = contract();
+        as_caller(accounts(0));
+        c.set_service(accounts(3));
     }
 
     #[test]

@@ -9,14 +9,11 @@ import {
   twilioEnv,
   vtpassEnv,
 } from "@earmark/config";
-import type { Order } from "@earmark/shared";
+import { type Bot, createBot } from "./app.js";
 import { Telegram, WhatsApp } from "./channels.js";
-import { type Lang, say } from "./copy.js";
 import { demoPorts } from "./demo.js";
-import { Dialog, newSession, type Session, updateMessage } from "./dialog.js";
-import { InviteStore, inviteCodeIn, inviteLinks } from "./invites.js";
 import { NearAiModel } from "./model.js";
-import { maskRef } from "./providers.js";
+import { Monitor } from "./monitor.js";
 
 // The assistant: Telegram (long polling) and WhatsApp (Twilio webhook) in
 // front of one dialog engine. Demo mode until the order service lands.
@@ -64,64 +61,23 @@ async function send(chat: string, text: string): Promise<void> {
   throw new Error(`no channel for ${kind}`);
 }
 
-// ── Sessions, one message at a time per chat ───────────────────────────
+// ── Alerts: console, plus a Telegram chat for the lead when configured ──
 
-const sessions = new Map<string, Session>();
-const queues = new Map<string, Promise<void>>();
-const chatOfFamily = new Map<string, string>();
-const announced = new Set<string>();
-const invites = new InviteStore();
+const alertChat = process.env.ALERTS_TELEGRAM_CHAT_ID?.trim();
+const monitor = new Monitor({
+  send: (msg) => {
+    console.error(`ALERT ${msg}`);
+    if (telegram && alertChat) {
+      telegram
+        .send(alertChat, `⚠️ Earmark: ${msg}`)
+        .catch((e) => console.error(`alert to Telegram failed: ${String(e)}`));
+    }
+  },
+});
 
-function serial(chat: string, job: () => Promise<void>): Promise<void> {
-  const run = (queues.get(chat) ?? Promise.resolve()).then(job, job);
-  queues.set(
-    chat,
-    run.catch(() => {}),
-  );
-  return run;
-}
-
-const langOf = (chat: string): Lang => sessions.get(chat)?.lang ?? "en";
-
-// ── Judge view transcript: demo families only, long numbers masked ─────
-
-type Line = { from: "recipient" | "bot"; text: string; at: string };
-const transcripts = new Map<string, Line[]>();
-const maskNumbers = (text: string) =>
-  text.replace(/\d[\d ]{5,}\d/g, (m) => maskRef(m.replace(/ /g, "")));
-
-function record(chat: string, from: Line["from"], text: string): void {
-  const familyId = [...chatOfFamily].find(([, c]) => c === chat)?.[0];
-  if (!familyId) return;
-  const lines = transcripts.get(familyId) ?? [];
-  lines.push({ from, text: maskNumbers(text), at: new Date().toISOString() });
-  transcripts.set(familyId, lines.slice(-100));
-}
-
-async function deliver(chat: string, text: string): Promise<void> {
-  record(chat, "bot", text);
-  await send(chat, text);
-}
-
-function onOrderUpdate(o: Order): void {
-  const chat = chatOfFamily.get(o.familyId);
-  if (!chat) return;
-  const out: string[] = [];
-  if ((o.status === "fulfilled" || o.status === "refunded") && !announced.has(o.id)) {
-    announced.add(o.id);
-    const msg = updateMessage(o, langOf(chat), null);
-    if (msg) out.push(msg);
-  }
-  const link = receiptLink(o);
-  if (link && !announced.has(`${o.id}:receipt`)) {
-    announced.add(`${o.id}:receipt`);
-    out.push(say(langOf(chat), "receipt", { link }));
-  }
-  for (const text of out) {
-    deliver(chat, text).catch((e) => console.error(`notify ${chat} failed: ${String(e)}`));
-  }
-}
-
+// The bot and the demo need each other: the demo tells the bot when an
+// order moves, the bot reads the demo's ports.
+let bot: Bot | null = null;
 const webUrl = (process.env.WEB_APP_URL ?? "http://localhost:5173").replace(/\/+$/, "");
 const demo = await demoPorts({
   vtpass: {
@@ -135,70 +91,28 @@ const demo = await demoPorts({
   model,
   testnetStateFile: resolve(ROOT, ".earmark/receipts-testnet.json"),
   receiptsPageUrl: `${webUrl}/receipt.html`,
-  onOrderUpdate,
+  onOrderUpdate: (o) => bot?.onOrderUpdate(o),
+  onOrderWaiting: (o) => bot?.onOrderWaiting(o),
+  alert: (m) => monitor.alert(m),
 });
-const { ports, receiptLink } = demo;
-const dialog = new Dialog(ports);
-
-async function onMessage(chat: string, text: string | null): Promise<void> {
-  return serial(chat, async () => {
-    const session = sessions.get(chat) ?? newSession();
-    const code = text ? inviteCodeIn(text) : null;
-    let replies: string[];
-    if (code) {
-      // An invite link: connect this chat to the family that made it.
-      const r = invites.redeem(code, chat);
-      if (r.ok && demo.connect(chat, r.familyId)) {
-        chatOfFamily.set(r.familyId, chat);
-        record(chat, "recipient", "(opened the invite link)");
-        const family = await ports.family(chat);
-        const sender = family?.senderName ?? "";
-        replies = [
-          `${say(session.lang, "connected", { sender })}\n\n${say(session.lang, "help", { sender })}`,
-        ];
-      } else {
-        replies = [say(session.lang, "inviteBad")];
-      }
-    } else if (text === null) {
-      replies = [say(session.lang, "textOnly")];
-    } else if (/^\/start\b/.test(text)) {
-      const family = await ports.family(chat);
-      replies = [
-        say(session.lang, family ? "help" : "notConnected", { sender: family?.senderName ?? "" }),
-      ];
-    } else {
-      record(chat, "recipient", text);
-      const turn = await dialog.handle(chat, session, text);
-      sessions.set(chat, turn.session);
-      replies = turn.replies;
-    }
-    for (const r of replies) await deliver(chat, r);
-  });
-}
 
 const botName = telegram ? await telegram.start() : null;
 const whatsappNumber = isConfigured(twilioEnv)
   ? readEnv(twilioEnv).TWILIO_WHATSAPP_FROM.replace(/^whatsapp:/, "")
   : null;
 
-/** A demo family and its invite. The sender app calls this in Phase 12. */
-function newInvite(senderName?: string) {
-  const family = demo.createFamily(senderName);
-  const invite = invites.create(family.familyId);
-  const links = inviteLinks(invite.code, { telegramBot: botName, whatsappNumber });
-  const contract = demo.contractId;
-  return {
-    familyId: family.familyId,
-    expiresAt: invite.expiresAt,
-    ...links,
-    feed: contract
-      ? `${webUrl}/receipt.html?network=testnet&contract=${contract}&family=${family.familyId}`
-      : null,
-    judge: contract
-      ? `${webUrl}/judge.html?network=testnet&contract=${contract}&family=${family.familyId}&bot=http://localhost:${port}`
-      : null,
-  };
-}
+bot = createBot({
+  demo,
+  send,
+  monitor,
+  links: { telegramBot: botName, whatsappNumber, webUrl, botUrl: `http://localhost:${port}` },
+});
+const app = bot;
+
+// Float, stuck orders and failure rate, every minute.
+setInterval(() => {
+  app.check().catch((e) => monitor.alert(`monitor check failed: ${String(e)}`, "monitor"));
+}, 60_000).unref();
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
@@ -216,6 +130,21 @@ const server = createServer((req, res) => {
         model: ai.NEAR_AI_MODEL,
       }),
     );
+    return;
+  }
+  // Orders by status, stuck orders, float and alerts. Local only.
+  if (req.method === "GET" && req.url === "/status") {
+    if (!LOOPBACK.has(req.socket.remoteAddress ?? "")) {
+      res.writeHead(403).end();
+      return;
+    }
+    app
+      .check()
+      .then(() => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(monitor.status(), null, 2));
+      })
+      .catch(() => res.writeHead(500).end());
     return;
   }
   // Local only until the sender app (Phase 12) makes invites behind sign-in.
@@ -237,7 +166,8 @@ const server = createServer((req, res) => {
         // no name: the demo default
       }
       res.writeHead(201, { "content-type": "application/json" });
-      res.end(JSON.stringify(newInvite(senderName)));
+      const { code: _code, ...invite } = app.newInvite(senderName);
+      res.end(JSON.stringify(invite));
     });
     return;
   }
@@ -247,21 +177,14 @@ const server = createServer((req, res) => {
   const t = req.method === "GET" && req.url?.match(/^\/demo\/family\?family=(fam_[a-z0-9]{16})$/);
   if (t) {
     const familyId = t[1] as string;
-    ports
-      .recent(familyId, 50)
-      .then((orders) => {
+    app
+      .familyView(familyId)
+      .then((view) => {
         res.writeHead(200, {
           "content-type": "application/json",
           "access-control-allow-origin": webUrl,
         });
-        res.end(
-          JSON.stringify({
-            transcript: transcripts.get(familyId) ?? [],
-            receipts: orders
-              .filter((o) => o.receiptTxHash && !o.receiptTxHash.includes(":"))
-              .map((o) => ({ orderId: o.id, txHash: o.receiptTxHash })),
-          }),
-        );
+        res.end(JSON.stringify(view));
       })
       .catch(() => res.writeHead(500).end());
     return;
@@ -294,7 +217,9 @@ const server = createServer((req, res) => {
       }
       const msg = WhatsApp.chatOf(params);
       if (msg)
-        onMessage(`wa:${msg.from}`, msg.text).catch((e) => console.error(`whatsapp: ${String(e)}`));
+        app
+          .onMessage(`wa:${msg.from}`, msg.text, msg.id)
+          .catch((e) => console.error(`whatsapp: ${String(e)}`));
     });
     return;
   }
@@ -316,10 +241,10 @@ server.listen(port, () => {
 
 if (telegram) {
   console.log(`Telegram: polling as @${botName}`);
-  void telegram.poll(onMessage);
+  void telegram.poll(app.onMessage);
 }
 
-const first = newInvite();
+const first = app.newInvite();
 console.log("Demo family ready. Open the invite link on your phone:");
 if (first.telegram) console.log(`  Telegram: ${first.telegram}`);
 if (first.whatsapp) console.log(`  WhatsApp: ${first.whatsapp}`);

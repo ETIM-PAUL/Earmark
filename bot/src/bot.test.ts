@@ -474,10 +474,13 @@ describe("WhatsApp webhook signature", () => {
     params.set("Body", "buy 50k light");
     expect(wa.verify(url, params, sig)).toBe(false);
     expect(
-      WhatsApp.chatOf(new URLSearchParams({ From: "whatsapp:+2348031234567", Body: "hi" })),
+      WhatsApp.chatOf(
+        new URLSearchParams({ From: "whatsapp:+2348031234567", Body: "hi", MessageSid: "SM1" }),
+      ),
     ).toEqual({
       from: "+2348031234567",
       text: "hi",
+      id: "wa:SM1",
     });
   });
 });
@@ -496,6 +499,7 @@ describe("Pidgin for every outside message", () => {
       "We couldn't reach the biller just now. Please try again in a minute.",
       `This order is from yesterday, so we couldn't send it today. ${billers.COMING_BACK}`,
       `The biller never received this payment. ${billers.COMING_BACK}`,
+      (await import("./demo.js")).PAYMENT_REFUSED,
     ];
     for (const t of texts) expect(untranslated(t), t).toEqual([]);
     expect(localize(billers.describeCode("016").recipient, "pcm")).toBe(
