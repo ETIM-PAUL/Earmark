@@ -18,9 +18,82 @@ const newRow = (label = ""): Row => ({ key: nextKey++, company: "", ref: "", lab
 export function Onboarding({
   config,
   onCreated,
+  onJoined,
 }: {
   config: AppConfig;
   account: Account;
+  onCreated: (familyId: string, invite: Invite) => void;
+  onJoined: (familyId: string) => void;
+}) {
+  const [joining, setJoining] = useState(false);
+  if (joining) return <Join onJoined={onJoined} onBack={() => setJoining(false)} />;
+  return (
+    <>
+      <button type="button" className="ghost" onClick={() => setJoining(true)}>
+        A relative invited me: join their family
+      </button>
+      <CreateFamily config={config} onCreated={onCreated} />
+    </>
+  );
+}
+
+/** Redeem the code a relative sent, to share their family. */
+function Join({ onJoined, onBack }: { onJoined: (familyId: string) => void; onBack: () => void }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function join(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ familyId: string }>("/api/join", { body: { code } });
+      onJoined(r.familyId);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="stack" onSubmit={join}>
+      <header>
+        <h1>Join a family</h1>
+        <p className="muted">
+          Type the code your relative gave you. You'll see the same budget and payments, and sign
+          large payments and rule changes with your own passkey.
+        </p>
+      </header>
+      <label>
+        Code
+        <input
+          autoCapitalize="characters"
+          autoComplete="off"
+          placeholder="ABCD-EFGH"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+      </label>
+      <button type="submit" className="primary" disabled={busy || code.trim().length < 8}>
+        {busy ? "Joining…" : "Join"}
+      </button>
+      <button type="button" className="ghost" onClick={onBack}>
+        Back
+      </button>
+      {error && (
+        <p role="alert" className="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+function CreateFamily({
+  config,
+  onCreated,
+}: {
+  config: AppConfig;
   onCreated: (familyId: string, invite: Invite) => void;
 }) {
   const [phone, setPhone] = useState("");

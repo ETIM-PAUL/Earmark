@@ -59,6 +59,10 @@ export interface ApprovalCard {
   reasons: string[];
   requestedAt: string;
   expiresAt: string;
+  /** Relatives who must approve, who has, and whether you already did. */
+  needed: number;
+  signedBy: string[];
+  youSigned: boolean;
 }
 
 export interface OrderRow {
@@ -74,8 +78,43 @@ export interface OrderRow {
   receiptTxHash: string | null;
 }
 
+export interface Member {
+  id: string;
+  name: string;
+  isOwner: boolean;
+  you: boolean;
+}
+
+export interface Team {
+  members: Member[];
+  /** Relatives who must sign a large payment or a rule change. */
+  required: number;
+  isOwner: boolean;
+  maxMembers: number;
+}
+
+/** A change waiting for relatives' signatures. */
+export interface Proposal {
+  id: string;
+  summary: string;
+  proposedBy: string;
+  signedBy: string[];
+  youSigned: boolean;
+  needed: number;
+  expiresAt: string;
+}
+
+/** What a change call answers: done, or waiting for more signatures. */
+export interface ChangeResult {
+  ok: true;
+  waiting?: true;
+  needed?: number;
+}
+
 export interface FamilyState {
   overview: Overview;
   approvals: ApprovalCard[];
   orders: OrderRow[];
+  team: Team;
+  proposals: Proposal[];
 }

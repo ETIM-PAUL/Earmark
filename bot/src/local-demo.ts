@@ -11,6 +11,7 @@ import { ruleModel } from "./mock/rule-model.js";
 import { simVtpass } from "./mock/sim-vtpass.js";
 import { Passkeys } from "./passkeys.js";
 import { senderRoute } from "./sender-api.js";
+import { FamilyTeam } from "./team.js";
 
 /**
  * The whole bot with nothing real behind it, for `make demo`: a simulated
@@ -50,6 +51,7 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
   // Sender sign-in: passkeys, verified here. rpID is the web app's host
   // (WebAuthn allows "localhost" over http, not an IP address).
   const accounts = new SenderAccounts();
+  const team = new FamilyTeam(accounts);
   const passkeys = new Passkeys({
     rpID: new URL(webUrl).hostname,
     rpName: "Earmark (local demo)",
@@ -92,6 +94,7 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
         bot,
         accounts,
         passkeys,
+        team,
         webUrl,
         limiter: new RateLimiter({ burst: 60, refillMs: 1_000 }),
         config: { network: "testnet", contractId: chain.contractId, rpcUrl: chainUrl },

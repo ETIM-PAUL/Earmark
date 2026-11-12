@@ -1,8 +1,18 @@
 import { useState } from "react";
 import { api } from "./api.js";
 import { CATEGORY_NAMES, naira, statusLabel, timeLeft, usdToNaira } from "./format.js";
-import { decide } from "./passkey.js";
-import type { AppConfig, ApprovalCard, FamilyState, Invite, OrderRow, Overview } from "./types.js";
+import { decide, signProposal } from "./passkey.js";
+import type {
+  AppConfig,
+  ApprovalCard,
+  ChangeResult,
+  FamilyState,
+  Invite,
+  OrderRow,
+  Overview,
+  Proposal,
+  Team,
+} from "./types.js";
 import { usePoll } from "./usePoll.js";
 
 type Tab = "home" | "approvals" | "rules" | "topup";
@@ -25,7 +35,7 @@ export function Dashboard({
   if (!state) {
     return <p className="muted center">{error ? error.message : "Loading your family…"}</p>;
   }
-  const waiting = state.approvals.length;
+  const waiting = state.approvals.length + state.proposals.length;
   return (
     <>
       {state.overview.frozen && (
@@ -44,9 +54,22 @@ export function Dashboard({
             goApprovals={() => setTab("approvals")}
           />
         )}
-        {tab === "approvals" && <Approvals cards={state.approvals} onChange={refresh} />}
+        {tab === "approvals" && (
+          <Approvals
+            familyId={familyId}
+            cards={state.approvals}
+            proposals={state.proposals}
+            onChange={refresh}
+          />
+        )}
         {tab === "rules" && (
-          <Rules familyId={familyId} overview={state.overview} config={config} onChange={refresh} />
+          <Rules
+            familyId={familyId}
+            overview={state.overview}
+            team={state.team}
+            config={config}
+            onChange={refresh}
+          />
         )}
         {tab === "topup" && <TopUp config={config} overview={state.overview} />}
       </div>
@@ -115,13 +138,20 @@ function Home({
   onChange: () => void;
   goApprovals: () => void;
 }) {
-  const { overview: o, orders, approvals } = state;
+  const { overview: o, orders, approvals, proposals, team } = state;
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
   const toggleFreeze = async () => {
     setBusy(true);
+    setNotice("");
     try {
-      await api(`/api/families/${familyId}/freeze`, { body: { frozen: !o.frozen } });
+      const r = await api<ChangeResult>(`/api/families/${familyId}/freeze`, {
+        body: { frozen: !o.frozen },
+      });
+      if (r.waiting) setNotice(waitingNotice(r.needed));
       onChange();
+    } catch (e) {
+      setNotice((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -142,11 +172,11 @@ function Home({
         )}
       </section>
 
-      {approvals.length > 0 && (
+      {approvals.length + proposals.length > 0 && (
         <button type="button" className="banner wait" onClick={goApprovals}>
-          {approvals.length === 1
+          {approvals.length + proposals.length === 1
             ? "1 request is waiting for you"
-            : `${approvals.length} requests are waiting for you`}{" "}
+            : `${approvals.length + proposals.length} requests are waiting for you`}{" "}
           →
         </button>
       )}
@@ -169,6 +199,7 @@ function Home({
 
       {invite && <InviteCard invite={invite} />}
       <RecipientCard familyId={familyId} overview={o} />
+      <TeamCard familyId={familyId} team={team} onChange={onChange} />
 
       <button
         type="button"
@@ -178,9 +209,15 @@ function Home({
       >
         {o.frozen ? "Unfreeze payments" : "Freeze everything"}
       </button>
+      {notice && (
+        <p role="status" className="banner wait">
+          {notice}
+        </p>
+      )}
       {!o.frozen && (
         <p className="muted small center">
           Freezing refuses every new payment and cancels anything waiting for you.
+          {team.members.length > 1 && " Any relative can freeze; unfreezing needs the signatures."}
         </p>
       )}
     </div>
@@ -305,10 +342,143 @@ function RecipientCard({ familyId, overview: o }: { familyId: string; overview: 
   );
 }
 
+const waitingNotice = (needed?: number) =>
+  `Sent to your relatives. It takes effect when ${needed ?? "enough"} of you have signed. They'll see it under Approvals.`;
+
+// ── Team ───────────────────────────────────────────────────────────────
+
+/** Relatives who share this family, and how many must sign. */
+export function TeamCard({
+  familyId,
+  team,
+  onChange,
+}: {
+  familyId: string;
+  team: Team;
+  onChange: () => void;
+}) {
+  const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const full = team.members.length >= team.maxMembers;
+  const run = async (f: () => Promise<void>) => {
+    setError("");
+    setNotice("");
+    try {
+      await f();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const invite = () =>
+    run(async () => {
+      setCopied(false);
+      setCode(await api(`/api/families/${familyId}/members/invite`, { body: {} }));
+    });
+  const copy = async () => {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code.code);
+      setCopied(true);
+    } catch {
+      // the code is on screen to copy by hand
+    }
+  };
+  const setRequired = (n: number) =>
+    run(async () => {
+      const r = await api<ChangeResult>(`/api/families/${familyId}/policy`, {
+        body: { required: n },
+      });
+      if (r.waiting) setNotice(waitingNotice(r.needed));
+      onChange();
+    });
+  return (
+    <section className="card stack">
+      <h2>Relatives</h2>
+      <ul className="list">
+        {team.members.map((m) => (
+          <li key={m.id}>
+            <strong>{m.name}</strong>
+            {m.you && <span className="muted"> (you)</span>}
+            {m.isOwner && <span className="muted small"> · set up the family</span>}
+          </li>
+        ))}
+      </ul>
+      {team.members.length > 1 && (
+        <label>
+          Signatures needed for large payments and rule changes
+          <select
+            value={team.required}
+            onChange={(e) => setRequired(Number(e.target.value))}
+            aria-label="Signatures needed"
+          >
+            {team.members.map((m, i) => (
+              <option key={m.id} value={i + 1}>
+                {i === 0 ? "1 (any one relative)" : `${i + 1} relatives`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <p className="muted small">
+        {team.required > 1
+          ? `A payment that needs your approval waits for ${team.required} relatives, each signing with their own passkey. Any one of you can decline it or freeze the account.`
+          : "Invite a relative to share this family. You can then ask for more than one signature on large payments and rule changes."}
+      </p>
+      {team.isOwner && !full && !code && (
+        <button type="button" className="ghost" onClick={invite}>
+          Add a relative
+        </button>
+      )}
+      {team.isOwner && full && (
+        <p className="muted small">The family is full ({team.maxMembers} relatives).</p>
+      )}
+      {code && (
+        <div className="stack">
+          <p>
+            Give them this code. They create an account, then choose “Join a family”. It works once
+            and expires {new Date(code.expiresAt).toLocaleDateString("en-GB")}.
+          </p>
+          <p className="big code">{code.code}</p>
+          <div className="actions">
+            <button type="button" className="ghost" onClick={copy}>
+              {copied ? "Copied" : "Copy code"}
+            </button>
+            <button type="button" className="ghost" onClick={() => setCode(null)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+      {notice && (
+        <p role="status" className="banner wait">
+          {notice}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
 // ── Approvals ──────────────────────────────────────────────────────────
 
-function Approvals({ cards, onChange }: { cards: ApprovalCard[]; onChange: () => void }) {
-  if (cards.length === 0) {
+function Approvals({
+  familyId,
+  cards,
+  proposals,
+  onChange,
+}: {
+  familyId: string;
+  cards: ApprovalCard[];
+  proposals: Proposal[];
+  onChange: () => void;
+}) {
+  if (cards.length === 0 && proposals.length === 0) {
     return (
       <section className="card">
         <h2>Nothing waiting</h2>
@@ -324,11 +494,85 @@ function Approvals({ cards, onChange }: { cards: ApprovalCard[]; onChange: () =>
       {cards.map((c) => (
         <ApprovalItem key={c.orderId} card={c} onChange={onChange} />
       ))}
+      {proposals.length > 0 && <h2>Changes waiting for signatures</h2>}
+      {proposals.map((p) => (
+        <ProposalItem key={p.id} familyId={familyId} proposal={p} onChange={onChange} />
+      ))}
     </div>
   );
 }
 
-function ApprovalItem({ card, onChange }: { card: ApprovalCard; onChange: () => void }) {
+/** "1 of 2 relatives have approved: Ada" */
+const progress = (signedBy: string[], needed: number) =>
+  `${signedBy.length} of ${needed} relatives have signed${signedBy.length ? `: ${signedBy.join(", ")}` : ""}`;
+
+function ProposalItem({
+  familyId,
+  proposal: p,
+  onChange,
+}: {
+  familyId: string;
+  proposal: Proposal;
+  onChange: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const act = async (f: () => Promise<unknown>) => {
+    setBusy(true);
+    setError("");
+    try {
+      await f();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      onChange();
+    }
+  };
+  return (
+    <section className="card stack approval">
+      <p>
+        <strong>{p.summary}</strong>
+        <br />
+        <span className="muted">{p.proposedBy} suggested this.</span>
+      </p>
+      <p className="muted small">
+        {progress(p.signedBy, p.needed)}. Cancels itself {timeLeft(p.expiresAt)}.
+      </p>
+      {error && (
+        <p role="alert" className="alert">
+          {error}
+        </p>
+      )}
+      <div className="actions">
+        {p.youSigned ? (
+          <p className="muted">You signed. Waiting for another relative.</p>
+        ) : (
+          <button
+            type="button"
+            className="primary"
+            disabled={busy}
+            onClick={() => act(() => signProposal(familyId, p.id))}
+          >
+            {busy ? "Confirm on your device…" : "Sign"}
+          </button>
+        )}
+        <button
+          type="button"
+          className="ghost"
+          disabled={busy}
+          onClick={() =>
+            act(() => api(`/api/families/${familyId}/proposals/${p.id}/cancel`, { body: {} }))
+          }
+        >
+          Turn down
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export function ApprovalItem({ card, onChange }: { card: ApprovalCard; onChange: () => void }) {
   const [busy, setBusy] = useState<"approved" | "declined" | null>(null);
   const [error, setError] = useState("");
   const answer = async (decision: "approved" | "declined") => {
@@ -362,6 +606,7 @@ function ApprovalItem({ card, onChange }: { card: ApprovalCard; onChange: () => 
           <li key={r}>{r}</li>
         ))}
       </ul>
+      {card.needed > 1 && <p className="muted small">{progress(card.signedBy, card.needed)}.</p>}
       <p className="muted small">Cancels itself {timeLeft(card.expiresAt)} if you don't answer.</p>
       {error && (
         <p role="alert" className="alert">
@@ -369,14 +614,18 @@ function ApprovalItem({ card, onChange }: { card: ApprovalCard; onChange: () => 
         </p>
       )}
       <div className="actions">
-        <button
-          type="button"
-          className="primary"
-          disabled={busy !== null}
-          onClick={() => answer("approved")}
-        >
-          {busy === "approved" ? "Confirm on your device…" : "Approve"}
-        </button>
+        {card.youSigned ? (
+          <p className="muted">You approved. Waiting for another relative.</p>
+        ) : (
+          <button
+            type="button"
+            className="primary"
+            disabled={busy !== null}
+            onClick={() => answer("approved")}
+          >
+            {busy === "approved" ? "Confirm on your device…" : "Approve"}
+          </button>
+        )}
         <button
           type="button"
           className="ghost"
@@ -395,19 +644,24 @@ function ApprovalItem({ card, onChange }: { card: ApprovalCard; onChange: () => 
 function Rules({
   familyId,
   overview: o,
+  team,
   config,
   onChange,
 }: {
   familyId: string;
   overview: Overview;
+  team: Team;
   config: AppConfig;
   onChange: () => void;
 }) {
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const send = async (path: string, body: object) => {
     setError("");
+    setNotice("");
     try {
-      await api(`/api/families/${familyId}/${path}`, { body });
+      const r = await api<ChangeResult>(`/api/families/${familyId}/${path}`, { body });
+      if (r.waiting) setNotice(waitingNotice(r.needed));
       onChange();
     } catch (e) {
       setError((e as Error).message);
@@ -415,6 +669,16 @@ function Rules({
   };
   return (
     <div className="stack">
+      {team.required > 1 && (
+        <p className="muted small">
+          Changes here wait for {team.required} relatives to sign before they take effect.
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="banner wait">
+          {notice}
+        </p>
+      )}
       <section className="card stack">
         <h2>Start from a preset</h2>
         <p className="muted">This replaces the rules below. Your monthly budget isn't touched.</p>

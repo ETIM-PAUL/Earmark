@@ -390,3 +390,11 @@ button:disabled {
       opacity 0.15s;
   }
 }
+
+/* A join code, big enough to read aloud */
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: all;
+}

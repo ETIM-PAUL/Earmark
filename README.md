@@ -45,7 +45,7 @@ make demo
 | Chat                                                                                                 | A web chat in the judge page                                                                                  | Telegram (live) and WhatsApp through the Twilio sandbox              |
 | Family paying settlement, refunds                                                                    | Simulated                                                                                                     | Simulated (Phase 8 needs mainnet accounts and is not built)          |
 | Sender approval card and decision                                                                    | Signed by the sender's **passkey** in the app (the judge page's demo owner signs for its own pane)            | Same; the real sender signs with their passkey                       |
-| Sender web app                                                                                       | **Real:** passkey sign-in, family setup, rule editing, approvals, freeze, activity. **Not available:** top-up | Same                                                                 |
+| Sender web app                                                                                       | **Real:** passkey sign-in, family setup, rule editing, approvals, freeze, activity, several relatives per family with co-signing. **Not available:** top-up | Same                                                                 |
 
 No mainnet transaction exists yet. The receipts contract is live on testnet at [`earmark-receipts-9e9730f1.testnet`](https://testnet.nearblocks.io/address/earmark-receipts-9e9730f1.testnet) with real receipts from VTpass sandbox purchases; the page verifies each one against the archival RPC. Mainnet deployment waits on the mainnet accounts in `.env.example`.
 
@@ -63,7 +63,7 @@ No mainnet transaction exists yet. The receipts contract is live on testnet at [
 ## Safety, in one list
 
 - The model only extracts fields. Only a message that is plainly "yes" confirms, matched by a regex, and only while a summary is showing.
-- Rules are checked in code after YES. A hard limit or a frozen account refuses; a category rule sends a card to the sender, who must approve or decline. Only a decision signed by the sender's passkey for that order counts, a stale price is re-quoted, and an unanswered request is cancelled after 24 hours.
+- Rules are checked in code after YES. A hard limit or a frozen account refuses; a category rule sends a card to the sender, who must approve or decline. Only a decision signed by a sender's passkey for that order counts (a family can ask for two or more relatives to sign), a stale price is re-quoted, and an unanswered request is cancelled after 24 hours.
 - A 10-minute-old price is never paid. The float guard stops new orders when the VTpass balance is low.
 - One order ID is never bought twice: state is saved before VTpass is called, and then the order is only requeried.
 - Failure drills (VTpass down, float empty, wrong meter, double YES, Agent API error, RPC down…) each end in a clear message plus a refund or a retry.

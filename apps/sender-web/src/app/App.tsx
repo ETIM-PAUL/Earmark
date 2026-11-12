@@ -86,6 +86,7 @@ export function App() {
             setFirstInvite(invite);
             setAuth({ state: "in", account: { ...account, familyIds: [id] } });
           }}
+          onJoined={(id) => setAuth({ state: "in", account: { ...account, familyIds: [id] } })}
         />
       )}
     </Shell>

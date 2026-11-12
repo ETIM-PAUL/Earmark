@@ -18,6 +18,7 @@ import { NearAiModel } from "./model.js";
 import { Monitor } from "./monitor.js";
 import { Passkeys } from "./passkeys.js";
 import { senderRoute } from "./sender-api.js";
+import { FamilyTeam } from "./team.js";
 
 // The assistant: Telegram (long polling) and WhatsApp (Twilio webhook) in
 // front of one dialog engine. Demo mode until the order service lands.
@@ -85,6 +86,7 @@ let bot: Bot | null = null;
 const webUrl = (process.env.WEB_APP_URL ?? "http://localhost:5173").replace(/\/+$/, "");
 // Sender sign-in and approval signatures: passkeys, verified here.
 const accounts = new SenderAccounts();
+const team = new FamilyTeam(accounts);
 const passkeys = new Passkeys({
   rpID: new URL(webUrl).hostname,
   rpName: "Earmark",
@@ -139,6 +141,7 @@ const server = createServer((req, res) => {
       bot: app,
       accounts,
       passkeys,
+      team,
       webUrl,
       config: { network: "testnet", contractId: demo.contractId, rpcUrl: null },
     })

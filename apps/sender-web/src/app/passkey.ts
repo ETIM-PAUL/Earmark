@@ -67,20 +67,43 @@ export async function signIn(): Promise<Signed> {
 export async function decide(
   orderId: string,
   decision: "approved" | "declined",
-): Promise<{ status: string }> {
+): Promise<{ status: string; signed?: number; needed?: number }> {
   try {
     const options = await api<never>("/api/decisions/options", { body: { orderId, decision } });
     const response = await startAuthentication({ optionsJSON: options });
-    return await api<{ ok: true; status: string }>("/api/decisions", {
-      body: { orderId, decision, response },
-    });
+    return await api<{ ok: true; status: string; signed?: number; needed?: number }>(
+      "/api/decisions",
+      {
+        body: { orderId, decision, response },
+      },
+    );
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
       throw new Error(
         e.reason === "expired"
           ? "That request ran out of time, so it was cancelled."
-          : "That request is no longer waiting.",
+          : e.reason === "already_signed"
+            ? "You've already approved this one. It's waiting for another relative."
+            : "That request is no longer waiting.",
       );
+    }
+    throw friendly(e);
+  }
+}
+
+/** Sign a change another relative proposed. The signature covers exactly that change. */
+export async function signProposal(
+  familyId: string,
+  id: string,
+): Promise<{ applied: boolean; signed: number; needed: number }> {
+  try {
+    const base = `/api/families/${familyId}/proposals/${id}`;
+    const options = await api<never>(`${base}/options`, { body: {} });
+    const response = await startAuthentication({ optionsJSON: options });
+    return await api(`${base}/sign`, { body: { response } });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409) {
+      throw new Error("That change is no longer waiting.");
     }
     throw friendly(e);
   }

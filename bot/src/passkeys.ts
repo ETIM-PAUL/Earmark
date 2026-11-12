@@ -147,24 +147,28 @@ export class Passkeys {
       : null;
   }
 
-  // ── Signing a decision ───────────────────────────────────────────────
+  // ── Signing a decision, or any other message ─────────────────────────
 
-  /** The challenge a decision is signed over. Anyone can recompute it; it isn't secret. */
-  decisionChallenge(order: Order, decision: Decision): string {
-    return b64(createHash("sha256").update(decisionMessage(order, decision)).digest());
+  /** The challenge a message is signed over. Anyone can recompute it; it isn't secret. */
+  messageChallenge(message: string): string {
+    return b64(createHash("sha256").update(message).digest());
   }
 
-  async decisionOptions(
+  /** The challenge a decision is signed over. */
+  decisionChallenge(order: Order, decision: Decision): string {
+    return this.messageChallenge(decisionMessage(order, decision));
+  }
+
+  async messageOptions(
     accountId: string,
-    order: Order,
-    decision: Decision,
+    message: string,
   ): Promise<PublicKeyCredentialRequestOptionsJSON | null> {
     const account = this.cfg.accounts.get(accountId);
     if (!account) return null;
     return generateAuthenticationOptions({
       rpID: this.cfg.rpID,
       userVerification: "required",
-      challenge: Buffer.from(this.decisionChallenge(order, decision), "base64url"),
+      challenge: Buffer.from(this.messageChallenge(message), "base64url"),
       allowCredentials: account.credentials.map((c) => ({
         id: c.id,
         ...(c.transports ? { transports: c.transports } : {}),
@@ -172,22 +176,38 @@ export class Passkeys {
     });
   }
 
+  decisionOptions(accountId: string, order: Order, decision: Decision) {
+    return this.messageOptions(accountId, decisionMessage(order, decision));
+  }
+
   /**
-   * The owner-signature check `decide` calls: `proof` is the JSON of the
-   * assertion the sender's passkey made for this order and decision. Only a
-   * passkey of the account that owns the family counts.
+   * Which member of the family signed `message`: `proof` is the JSON of the
+   * assertion a passkey made over it. Only a passkey of an account in the
+   * family counts. Null if nobody valid did.
    */
-  async verifyDecision(order: Order, decision: Decision, proof: string): Promise<boolean> {
-    const owner = this.cfg.accounts.ownerOf(order.familyId);
-    if (!owner) return false;
+  async signerOf(familyId: string, message: string, proof: string): Promise<string | null> {
     let response: AuthenticationResponseJSON;
     try {
       response = JSON.parse(proof) as AuthenticationResponseJSON;
     } catch {
-      return false;
+      return null;
     }
-    if (!owner.credentials.some((c) => c.id === response.id)) return false;
-    return this.check(owner.id, response, this.decisionChallenge(order, decision), true);
+    const member = this.cfg.accounts
+      .membersOf(familyId)
+      .find((m) => m.credentials.some((c) => c.id === response?.id));
+    if (!member) return null;
+    return (await this.check(member.id, response, this.messageChallenge(message), true))
+      ? member.id
+      : null;
+  }
+
+  signerOfDecision(order: Order, decision: Decision, proof: string): Promise<string | null> {
+    return this.signerOf(order.familyId, decisionMessage(order, decision), proof);
+  }
+
+  /** The owner-signature check `decide` calls: any member of the family may sign. */
+  async verifyDecision(order: Order, decision: Decision, proof: string): Promise<boolean> {
+    return (await this.signerOfDecision(order, decision, proof)) !== null;
   }
 
   private async check(

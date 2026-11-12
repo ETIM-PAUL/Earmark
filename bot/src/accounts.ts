@@ -24,11 +24,15 @@ export interface SenderAccount {
 }
 
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** The creator plus relatives who joined with a code. */
+export const MAX_MEMBERS = 5;
 
 export class SenderAccounts {
   private readonly accounts = new Map<string, SenderAccount>();
   private readonly byCredential = new Map<string, string>();
   private readonly owners = new Map<string, string>();
+  /** Everyone who may act for a family, creator first. */
+  private readonly members = new Map<string, string[]>();
   private readonly sessions = new Map<string, { accountId: string; expiresAt: number }>();
 
   constructor(private readonly now: () => number = Date.now) {}
@@ -60,6 +64,28 @@ export class SenderAccounts {
     if (!a) throw new Error("no such account");
     a.familyIds.push(familyId);
     this.owners.set(familyId, accountId);
+    this.members.set(familyId, [accountId]);
+  }
+
+  /** A relative joins a family. False if they're already in it or it is full. */
+  addMember(accountId: string, familyId: string): boolean {
+    const a = this.accounts.get(accountId);
+    const list = this.members.get(familyId);
+    if (!a || !list || list.includes(accountId) || list.length >= MAX_MEMBERS) return false;
+    list.push(accountId);
+    a.familyIds.push(familyId);
+    return true;
+  }
+
+  membersOf(familyId: string): SenderAccount[] {
+    return (this.members.get(familyId) ?? []).flatMap((id) => {
+      const a = this.accounts.get(id);
+      return a ? [a] : [];
+    });
+  }
+
+  isMember(accountId: string, familyId: string): boolean {
+    return this.members.get(familyId)?.includes(accountId) ?? false;
   }
 
   ownerOf(familyId: string): SenderAccount | null {
