@@ -1,21 +1,10 @@
-import { CATEGORIES } from "@earmark/shared";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { App } from "./app/App.js";
+import "./app/app.css";
 
-// Sender app skeleton. Owner: Apps. Phase 12 fills this in: sign-in,
-// family setup, top-ups, the receipts feed, approvals and freeze.
-
-function App() {
-  return (
-    <main
-      style={{ fontFamily: "system-ui, sans-serif", maxWidth: 480, margin: "0 auto", padding: 16 }}
-    >
-      <h1>Earmark</h1>
-      <p>Send money home with rules.</p>
-      <p>Bills we pay: {CATEGORIES.join(", ")}.</p>
-    </main>
-  );
-}
+// The sender app: passkey sign-in, family setup, approvals, rules, freeze
+// and the activity feed. Talks to the bot's /api (VITE_API_URL).
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

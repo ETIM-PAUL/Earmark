@@ -21,16 +21,25 @@ export const EXPLORER: Record<Network, string> = {
   testnet: "https://testnet.nearblocks.io",
 };
 
+const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/;
+const localOnly = (v: string | null | undefined) =>
+  v && LOCAL_URL.test(v) ? v.replace(/\/$/, "") : null;
+
 /**
- * `?rpc=<url>` points the page at a local chain instead of NEAR, for the
- * keyless demo (make demo). Without it the page only talks to fastnear.
+ * A local chain instead of NEAR, for the keyless demo (make demo): from
+ * `?rpc=<url>` on the page, or from the app's config. Only localhost and
+ * 127.0.0.1 are accepted, so a crafted link can't point the page elsewhere.
+ * Without it the page only talks to fastnear.
  */
-export const LOCAL_RPC: string | null = (() => {
+export let LOCAL_RPC: string | null = (() => {
   // Typed by hand: this file also runs in Node (drills), which has no `location`.
   const loc = (globalThis as { location?: { search: string } }).location;
-  const v = loc ? new URLSearchParams(loc.search).get("rpc") : null;
-  return v && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(v) ? v.replace(/\/$/, "") : null;
+  return localOnly(loc ? new URLSearchParams(loc.search).get("rpc") : null);
 })();
+
+export function setLocalRpc(url: string | null | undefined): void {
+  LOCAL_RPC = localOnly(url);
+}
 
 export function parseNetwork(v: string | null | undefined): Network {
   return v === "mainnet" ? "mainnet" : "testnet";

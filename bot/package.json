@@ -16,6 +16,7 @@
     "@earmark/billers": "workspace:*",
     "@earmark/config": "workspace:*",
     "@earmark/shared": "workspace:*",
+    "@simplewebauthn/server": "14.0.3",
     "near-api-js": "7.4.0",
     "zod": "4.6.7"
   },

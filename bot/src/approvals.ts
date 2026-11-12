@@ -56,12 +56,13 @@ export function approvalCard(o: Order): ApprovalCard {
   };
 }
 
-const message = (o: Order, decision: Decision) =>
+/** What a decision is bound to: this order, this request, this decision. */
+export const decisionMessage = (o: Order, decision: Decision) =>
   `${o.id}|${o.approval?.requestedAt ?? ""}|${decision}`;
 
 /** What the owner's wallet signs: this order, this request, this decision. */
 export function ownerProof(secret: string, o: Order, decision: Decision): string {
-  return createHmac("sha256", secret).update(message(o, decision)).digest("hex");
+  return createHmac("sha256", secret).update(decisionMessage(o, decision)).digest("hex");
 }
 
 export function checkProof(secret: string, o: Order, decision: Decision, proof: string): boolean {

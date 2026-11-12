@@ -1,11 +1,15 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { Quoter } from "@earmark/billers";
+import { SenderAccounts } from "./accounts.js";
+import { apiRoute } from "./api.js";
 import { type Bot, createBot } from "./app.js";
 import { wireDemo } from "./demo.js";
+import { RateLimiter } from "./limits.js";
 import { MockChain } from "./mock/chain.js";
 import { ruleModel } from "./mock/rule-model.js";
 import { simVtpass } from "./mock/sim-vtpass.js";
+import { Passkeys } from "./passkeys.js";
 import { senderRoute } from "./sender-api.js";
 
 /**
@@ -43,6 +47,15 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
   const chain = new MockChain();
   const chainUrl = await chain.listen(opts.chainPort ?? 0);
   const sim = simVtpass({ balanceNgn: 1_000_000 });
+  // Sender sign-in: passkeys, verified here. rpID is the web app's host
+  // (WebAuthn allows "localhost" over http, not an IP address).
+  const accounts = new SenderAccounts();
+  const passkeys = new Passkeys({
+    rpID: new URL(webUrl).hostname,
+    rpName: "Earmark (local demo)",
+    origin: new URL(webUrl).origin,
+    accounts,
+  });
 
   let bot: Bot | null = null;
   const demo = wireDemo({
@@ -59,6 +72,7 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
     receiptsPageUrl: `${webUrl}/receipt.html`,
     onOrderUpdate: (o) => bot?.onOrderUpdate(o),
     onOrderWaiting: (o) => bot?.onOrderWaiting(o),
+    verifyOwner: (o, d, p) => passkeys.verifyDecision(o, d, p),
     // The simulated VTpass answers at once and has no 30 s repeat rule.
     executor: { sameBillGapMs: 0, purchase: { requerySchedule: [500, 1_000, 2_000] } },
     tickMs: 5_000,
@@ -71,6 +85,23 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
     };
     const local = LOOPBACK.has(req.socket.remoteAddress ?? "");
     if (senderRoute(req, res, { demo, webUrl })) return;
+    if (
+      bot &&
+      apiRoute(req, res, {
+        demo,
+        bot,
+        accounts,
+        passkeys,
+        webUrl,
+        limiter: new RateLimiter({ burst: 60, refillMs: 1_000 }),
+        config: { network: "testnet", contractId: chain.contractId, rpcUrl: chainUrl },
+        // No Telegram here: open the family's web chat so the judge page can type as the recipient.
+        afterFamilyCreated: async (familyId) => {
+          await bot?.onMessage(`web:${familyId}`, `/start ${bot.inviteFor(familyId).code}`);
+        },
+      })
+    )
+      return;
     if (req.method === "OPTIONS") return void res.writeHead(204, cors).end();
     if (req.method === "GET" && req.url === "/health") {
       res.writeHead(200, { "content-type": "application/json" });
@@ -124,7 +155,7 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
     demo,
     // Web chats are shown from the transcript; there is nowhere else to send.
     send: async () => {},
-    links: { webUrl, botUrl },
+    links: { webUrl, botUrl, rpcUrl: chainUrl },
   });
 
   // One demo family, with its chat already connected through its invite.

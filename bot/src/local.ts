@@ -10,5 +10,8 @@ const demo = await startLocalDemo({
 console.log("\nEarmark demo (local, no keys, no real money)");
 console.log(`  bot    ${demo.botUrl}`);
 console.log(`  chain  ${demo.chainUrl}  (local stand-in for the receipts contract)`);
-console.log(`\nOpen this in your browser:\n  ${demo.judge}\n`);
+const web = process.env.WEB_APP_URL ?? "http://localhost:5173";
+console.log(`\nSender app (sign up with a passkey, set up a family):\n  ${web}/`);
+console.log(`\nOr a ready-made family, all three views in one page:\n  ${demo.judge}\n`);
 console.log('Then type in the recipient chat: "abeg buy 5k light for my meter", then "yes".');
+console.log("Use localhost, not 127.0.0.1: passkeys need it.");

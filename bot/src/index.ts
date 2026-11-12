@@ -9,11 +9,14 @@ import {
   twilioEnv,
   vtpassEnv,
 } from "@earmark/config";
+import { SenderAccounts } from "./accounts.js";
+import { apiRoute } from "./api.js";
 import { type Bot, createBot } from "./app.js";
 import { Telegram, WhatsApp } from "./channels.js";
 import { demoPorts } from "./demo.js";
 import { NearAiModel } from "./model.js";
 import { Monitor } from "./monitor.js";
+import { Passkeys } from "./passkeys.js";
 import { senderRoute } from "./sender-api.js";
 
 // The assistant: Telegram (long polling) and WhatsApp (Twilio webhook) in
@@ -80,7 +83,16 @@ const monitor = new Monitor({
 // order moves, the bot reads the demo's ports.
 let bot: Bot | null = null;
 const webUrl = (process.env.WEB_APP_URL ?? "http://localhost:5173").replace(/\/+$/, "");
+// Sender sign-in and approval signatures: passkeys, verified here.
+const accounts = new SenderAccounts();
+const passkeys = new Passkeys({
+  rpID: new URL(webUrl).hostname,
+  rpName: "Earmark",
+  origin: new URL(webUrl).origin,
+  accounts,
+});
 const demo = await demoPorts({
+  verifyOwner: (o, d, p) => passkeys.verifyDecision(o, d, p),
   vtpass: {
     baseUrl: vt.VTPASS_BASE_URL,
     apiKey: vt.VTPASS_API_KEY,
@@ -121,6 +133,17 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 const server = createServer((req, res) => {
   if (senderRoute(req, res, { demo, webUrl })) return;
+  if (
+    apiRoute(req, res, {
+      demo,
+      bot: app,
+      accounts,
+      passkeys,
+      webUrl,
+      config: { network: "testnet", contractId: demo.contractId, rpcUrl: null },
+    })
+  )
+    return;
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(

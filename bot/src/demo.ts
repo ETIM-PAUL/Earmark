@@ -21,6 +21,8 @@ import {
   evaluateOrder,
   type FamilyRules,
   FUNDS_HELD_STATUSES,
+  formatNaira,
+  formatUsdc,
   setFrozen as freezeRules,
   lagosMonth,
   newFamilyId,
@@ -29,6 +31,8 @@ import {
   type Order,
   type PresetName,
   type Quote,
+  type SoftRulesChange,
+  updateSoftRules,
 } from "@earmark/shared";
 import type { KeyPairString } from "near-api-js";
 import {
@@ -46,6 +50,7 @@ import {
 } from "./approvals.js";
 import type { BotPorts, Family } from "./dialog.js";
 import type { ChatModel } from "./model.js";
+import { LABELS, maskRef } from "./providers.js";
 import { isPlainDataBundle, type Option } from "./variations.js";
 
 /**
@@ -76,6 +81,7 @@ export interface DemoConfig {
   /** Tells a chat that its order is taking a while. */
   onOrderWaiting?: (order: Order) => void;
   alert?: (msg: string) => void;
+  verifyOwner?: DemoDeps["verifyOwner"];
 }
 
 /**
@@ -121,6 +127,20 @@ export interface DemoDeps {
   tickMs?: number;
   /** The clock, for drills that need a later day. Default: the real one. */
   now?: () => Date;
+  /**
+   * Checks the owner's signature on a decision (a passkey assertion, from
+   * passkeys.ts). The demo owner's HMAC is always accepted too, for the
+   * judge page.
+   */
+  verifyOwner?: (order: Order, decision: Decision, proof: string) => Promise<boolean>;
+}
+
+/** What a sender gives when creating a family. */
+export interface NewFamily {
+  senderName?: string;
+  preset?: PresetName;
+  recipientPhone?: string;
+  saved?: Family["saved"];
 }
 
 export interface DemoWiring {
@@ -129,7 +149,7 @@ export interface DemoWiring {
   store: MemoryOrderStore;
   float: FloatGuard;
   receiptLink: (o: Order) => string | null;
-  createFamily: (senderName?: string, preset?: PresetName) => Family;
+  createFamily: (input?: NewFamily | string) => Family;
   connect: (chat: string, familyId: string) => boolean;
   contractId: string | null;
   /** Retry payments to settlement, then sweep the executor. */
@@ -153,7 +173,28 @@ export interface SenderSide {
   signAsDemoOwner: (orderId: string, decision: Decision) => Promise<string | null>;
   setFrozen: (familyId: string, frozen: boolean) => Promise<boolean>;
   applyPreset: (familyId: string, preset: PresetName) => boolean;
+  /** Change single category rules or the approval threshold. Hard limits can't change here. */
+  updateRules: (familyId: string, change: SoftRulesChange) => boolean;
   senderName: (familyId: string) => string | null;
+  /** The order behind an approval, to build what the sender signs. */
+  pendingOrder: (orderId: string) => Promise<Order | null>;
+  /** Safe summaries of a family's latest orders, newest first. */
+  orders: (familyId: string, n: number) => Promise<OrderSummary[]>;
+}
+
+export interface OrderSummary {
+  id: string;
+  category: string;
+  /** "Ikeja Electric" */
+  label: string;
+  who: string;
+  amountNgn: string;
+  amountUsd: string;
+  status: string;
+  /** What the recipient would be told, if it ended badly. */
+  note: string | null;
+  createdAt: string;
+  receiptTxHash: string | null;
 }
 
 export interface SenderOverview {
@@ -161,7 +202,18 @@ export interface SenderOverview {
   frozen: boolean;
   rulesVersion: number;
   approvalAboveNaira: number | null;
-  categories: { category: string; enabled: boolean; capNaira: number | null }[];
+  categories: {
+    category: string;
+    enabled: boolean;
+    capNaira: number | null;
+    spentNaira: number;
+  }[];
+  /** The monthly budget in the signed policy, and what's gone this Lagos month. */
+  budget: { monthlyUsd: string; spentUsd: string; leftUsd: string; perPaymentMaxUsd: string };
+  recipientPhone: string;
+  saved: { category: string; label: string; ref: string }[];
+  /** NGN per USD in a fresh quote, or null when no price is available. */
+  rateNgnPerUsd: string | null;
 }
 
 const SANDBOX = { phone: "08011111111", meter: "1111111111111", smartcard: "1212121212" };
@@ -226,6 +278,7 @@ export async function demoPorts(cfg: DemoConfig): Promise<DemoWiring> {
     onOrderUpdate: cfg.onOrderUpdate,
     ...(cfg.onOrderWaiting ? { onOrderWaiting: cfg.onOrderWaiting } : {}),
     ...(cfg.alert ? { alert: cfg.alert } : {}),
+    ...(cfg.verifyOwner ? { verifyOwner: cfg.verifyOwner } : {}),
   });
 }
 
@@ -253,15 +306,17 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
   const chats = new Map<string, string>();
 
   /** A demo family on the VTpass sandbox's test meter, smartcard and phone. */
-  const createFamily = (senderName = "Ada", preset?: PresetName): Family => {
+  const createFamily = (input: NewFamily | string = {}): Family => {
+    const opts: NewFamily = typeof input === "string" ? { senderName: input } : input;
+    const { senderName = "Ada", preset } = opts;
     const familyId = newFamilyId();
-    const at = new Date();
+    const at = now();
     const f: Family = {
       familyId,
       salt: newFamilySalt(),
       senderName,
-      recipientPhone: SANDBOX.phone,
-      saved: [
+      recipientPhone: opts.recipientPhone ?? SANDBOX.phone,
+      saved: opts.saved ?? [
         {
           category: "electricity",
           billerCode: "ikeja-electric",
@@ -403,7 +458,10 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
     if (order.status !== "awaiting_approval" || !order.approval) {
       return { ok: false, reason: "not_pending" };
     }
-    if (!checkProof(ownerSecret, order, decision, proof)) return { ok: false, reason: "bad_proof" };
+    const signed =
+      checkProof(ownerSecret, order, decision, proof) ||
+      (await deps.verifyOwner?.(order, decision, proof).catch(() => false)) === true;
+    if (!signed) return { ok: false, reason: "bad_proof" };
     const family = familyOf(order);
     const at = now();
     if (at.getTime() - Date.parse(order.approval.requestedAt) >= APPROVAL_TTL_MS) {
@@ -616,6 +674,13 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
     overview: async (familyId) => {
       const f = families.get(familyId);
       if (!f) return null;
+      await refreshUsage(f);
+      const budget = BigInt(Math.round(Number(f.rules.hardLimits.monthlyBudgetUsd) * 1e6));
+      const spent = BigInt(f.usage.spentUsdcAtomic);
+      const rate = await quoter
+        .quote(1_000_00)
+        .then((q) => q.rateNgnPerUsd)
+        .catch(() => null);
       return {
         senderName: f.senderName,
         frozen: f.rules.frozen,
@@ -629,9 +694,42 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
             f.rules.categories[c].monthlyCapNgnKobo === null
               ? null
               : (f.rules.categories[c].monthlyCapNgnKobo as number) / 100,
+          spentNaira: f.usage.spentNgnKoboByCategory[c] / 100,
         })),
+        budget: {
+          monthlyUsd: f.rules.hardLimits.monthlyBudgetUsd,
+          spentUsd: formatUsdc(spent.toString()),
+          leftUsd: formatUsdc((budget > spent ? budget - spent : 0n).toString()),
+          perPaymentMaxUsd: formatUsdc(f.rules.hardLimits.perTransactionMaxUsdcAtomic),
+        },
+        recipientPhone: maskRef(f.recipientPhone),
+        saved: f.saved.map((r) => ({ category: r.category, label: r.label, ref: maskRef(r.ref) })),
+        rateNgnPerUsd: rate,
       };
     },
+    updateRules: (familyId, change) => {
+      const f = families.get(familyId);
+      if (!f) return false;
+      f.rules = updateSoftRules(f.rules, change, now());
+      return true;
+    },
+    pendingOrder: async (orderId) => {
+      const o = await store.get(orderId);
+      return o?.status === "awaiting_approval" && o.approval ? o : null;
+    },
+    orders: async (familyId, n) =>
+      (await familyOrders(familyId)).slice(0, n).map((o) => ({
+        id: o.id,
+        category: o.category,
+        label: LABELS[o.billerCode] ?? o.billerCode,
+        who: maskRef(o.customerRef),
+        amountNgn: formatNaira(o.amountNgnKobo),
+        amountUsd: o.quote ? formatUsdc(o.quote.amountUsdcAtomic) : "?",
+        status: o.status,
+        note: o.failureReason ?? null,
+        createdAt: o.createdAt,
+        receiptTxHash: o.receiptTxHash && !o.receiptTxHash.includes(":") ? o.receiptTxHash : null,
+      })),
   };
 
   const tick = async () => {

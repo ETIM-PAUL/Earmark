@@ -25,6 +25,8 @@ export interface BotOptions {
     webUrl?: string;
     /** Where the judge view reads the chat from, e.g. http://localhost:4003 */
     botUrl?: string;
+    /** A local chain's RPC (the keyless demo), passed on to the pages. */
+    rpcUrl?: string;
   };
   limiter?: RateLimiter;
   monitor?: Monitor;
@@ -185,10 +187,9 @@ export function createBot(opts: BotOptions) {
     });
   }
 
-  /** A demo family and its invite. The sender app calls this in Phase 12. */
-  function newInvite(senderName?: string) {
-    const family = demo.createFamily(senderName);
-    const invite = invites.create(family.familyId);
+  /** A fresh single-use invite for a family, with its links. */
+  function inviteFor(familyId: string) {
+    const invite = invites.create(familyId);
     const l = opts.links ?? {};
     const links = inviteLinks(invite.code, {
       telegramBot: l.telegramBot ?? null,
@@ -197,18 +198,23 @@ export function createBot(opts: BotOptions) {
     const contract = demo.contractId;
     const web = l.webUrl ?? "http://localhost:5173";
     return {
-      familyId: family.familyId,
+      familyId,
       code: invite.code,
       expiresAt: invite.expiresAt,
       ...links,
       feed: contract
-        ? `${web}/receipt.html?network=testnet&contract=${contract}&family=${family.familyId}`
+        ? `${web}/receipt.html?network=testnet&contract=${contract}&family=${familyId}`
         : null,
       judge:
         contract && l.botUrl
-          ? `${web}/judge.html?network=testnet&contract=${contract}&family=${family.familyId}&bot=${l.botUrl}`
+          ? `${web}/judge.html?network=testnet&contract=${contract}&family=${familyId}&bot=${l.botUrl}${l.rpcUrl ? `&rpc=${encodeURIComponent(l.rpcUrl)}` : ""}`
           : null,
     };
+  }
+
+  /** A demo family and its invite. */
+  function newInvite(senderName?: string) {
+    return inviteFor(demo.createFamily(senderName ? { senderName } : {}).familyId);
   }
 
   /** The judge view: the chat and each receipt's tx hash. */
@@ -249,6 +255,7 @@ export function createBot(opts: BotOptions) {
     onOrderUpdate,
     onOrderWaiting,
     newInvite,
+    inviteFor,
     familyView,
     idle,
     check,
