@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_RATE_SOURCES,
@@ -10,19 +11,39 @@ import {
   Quoter,
   type ReceiptWriter,
   type Refunds,
+  requestIdIsToday,
   VtpassClient,
 } from "@earmark/billers";
 import {
   advance,
+  applyPreset,
   CATEGORIES,
+  evaluateOrder,
   type FamilyRules,
   FUNDS_HELD_STATUSES,
+  setFrozen as freezeRules,
   lagosMonth,
   newFamilyId,
   newFamilySalt,
+  newOrderId,
   type Order,
+  type PresetName,
+  type Quote,
 } from "@earmark/shared";
 import type { KeyPairString } from "near-api-js";
+import {
+  APPROVAL_TTL_MS,
+  type ApprovalCard,
+  approvalCard,
+  checkProof,
+  type DecideResult,
+  type Decision,
+  declinedMessage,
+  expiredMessage,
+  FROZEN_STOPPED,
+  NOTHING_PAID,
+  ownerProof,
+} from "./approvals.js";
 import type { BotPorts, Family } from "./dialog.js";
 import type { ChatModel } from "./model.js";
 import { isPlainDataBundle, type Option } from "./variations.js";
@@ -98,6 +119,8 @@ export interface DemoDeps {
   executor?: Pick<ExecutorDeps, "purchase" | "sameBillGapMs" | "unknownAfterMs">;
   /** Run tick() on a timer this often. 0: only when called. Default 15 s. */
   tickMs?: number;
+  /** The clock, for drills that need a later day. Default: the real one. */
+  now?: () => Date;
 }
 
 export interface DemoWiring {
@@ -106,7 +129,7 @@ export interface DemoWiring {
   store: MemoryOrderStore;
   float: FloatGuard;
   receiptLink: (o: Order) => string | null;
-  createFamily: (senderName?: string) => Family;
+  createFamily: (senderName?: string, preset?: PresetName) => Family;
   connect: (chat: string, familyId: string) => boolean;
   contractId: string | null;
   /** Retry payments to settlement, then sweep the executor. */
@@ -116,6 +139,29 @@ export interface DemoWiring {
   floorKobo: number;
   /** Resolves when no payment or purchase is running in the background. */
   settled: () => Promise<void>;
+  /** The sender's side: the approval inbox, decisions, freeze and presets. */
+  sender: SenderSide;
+}
+
+/** What the sender's app (Phase 12) will call, behind the owner's sign-in. */
+export interface SenderSide {
+  overview: (familyId: string) => Promise<SenderOverview | null>;
+  approvals: (familyId: string) => Promise<ApprovalCard[]>;
+  /** `proof` is the owner's signature over this order and decision. */
+  decide: (orderId: string, decision: Decision, proof: string) => Promise<DecideResult>;
+  /** Signs as the demo owner. The real owner signs in their own wallet. */
+  signAsDemoOwner: (orderId: string, decision: Decision) => Promise<string | null>;
+  setFrozen: (familyId: string, frozen: boolean) => Promise<boolean>;
+  applyPreset: (familyId: string, preset: PresetName) => boolean;
+  senderName: (familyId: string) => string | null;
+}
+
+export interface SenderOverview {
+  senderName: string;
+  frozen: boolean;
+  rulesVersion: number;
+  approvalAboveNaira: number | null;
+  categories: { category: string; enabled: boolean; capNaira: number | null }[];
 }
 
 const SANDBOX = { phone: "08011111111", meter: "1111111111111", smartcard: "1212121212" };
@@ -187,6 +233,7 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
   const { vtpass, quoter, receipts, contractId } = deps;
   if (!vtpass.isSandbox) throw new Error("demo mode runs against the VTpass sandbox only");
   const alert = deps.alert ?? ((m: string) => console.error(`ALERT ${m}`));
+  const now = deps.now ?? (() => new Date());
   const store = new MemoryOrderStore();
   const float = new FloatGuard({
     balance: () => vtpass.balance(),
@@ -206,7 +253,7 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
   const chats = new Map<string, string>();
 
   /** A demo family on the VTpass sandbox's test meter, smartcard and phone. */
-  const createFamily = (senderName = "Ada"): Family => {
+  const createFamily = (senderName = "Ada", preset?: PresetName): Family => {
     const familyId = newFamilyId();
     const at = new Date();
     const f: Family = {
@@ -224,7 +271,7 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
         },
         { category: "tv", billerCode: "dstv", ref: SANDBOX.smartcard, label: "house DStv" },
       ],
-      rules: demoRules(familyId, at),
+      rules: preset ? applyPreset(demoRules(familyId, at), preset, at) : demoRules(familyId, at),
       usage: {
         month: lagosMonth(at),
         spentNgnKoboByCategory: { electricity: 0, airtime: 0, data: 0, tv: 0 },
@@ -248,6 +295,7 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
     contactPhone: async () => SANDBOX.phone,
     notify: deps.onOrderUpdate,
     alert,
+    now,
     ...deps.executor,
   });
 
@@ -275,9 +323,15 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
    */
   const payOut = async (paying: Order): Promise<void> => {
     let next: Order;
+    // Frozen before any money moved: stop here.
+    if (families.get(paying.familyId)?.rules.frozen) {
+      next = advance(paying, "rejected", { failureReason: FROZEN_STOPPED }, now());
+      if (await store.replace(paying, next)) deps.onOrderUpdate(next);
+      return;
+    }
     try {
       const { txHash } = await payer.pay(paying);
-      next = advance(paying, "paid", { paymentTxHash: txHash });
+      next = advance(paying, "paid", { paymentTxHash: txHash }, now());
     } catch (e) {
       if (!(e instanceof PaymentRefused)) {
         alert(`order ${paying.id}: payment to settlement failed, will retry: ${String(e)}`);
@@ -285,11 +339,166 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
         return;
       }
       alert(`order ${paying.id}: ${e.message}`);
-      next = advance(paying, "rejected", { failureReason: PAYMENT_REFUSED });
+      next = advance(paying, "rejected", { failureReason: PAYMENT_REFUSED }, now());
     }
     if (!(await store.replace(paying, next))) return; // someone else moved it
     deps.onOrderUpdate(next);
     if (next.status === "paid") await run(next.id);
+  };
+
+  const familyOf = (o: Order): Family => {
+    const f = families.get(o.familyId);
+    if (!f) throw new Error(`order ${o.id}: no family ${o.familyId}`);
+    return f;
+  };
+
+  /** Phase 8 stand-in: the family account pays settlement, then the executor buys. */
+  const startPaying = async (order: Order): Promise<void> => {
+    const paying = advance(order, "paying", {}, now());
+    if (!(await store.replace(order, paying))) return;
+    track(payOut(paying).catch((e) => alert(`order ${order.id}: ${String(e)}`)));
+  };
+
+  // ── The sender's side: approvals, freeze, presets ──────────────────────
+
+  const ownerSecret = randomBytes(32).toString("hex");
+
+  const pending = async (familyId: string) =>
+    (await store.listByStatus(["awaiting_approval"]))
+      .filter((o) => o.familyId === familyId && o.approval)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  /** Move an order to a final status and tell the chat. False if someone else moved it first. */
+  const finish = async (order: Order, next: Order): Promise<boolean> => {
+    if (!(await store.replace(order, next))) return false;
+    deps.onOrderUpdate(next);
+    return true;
+  };
+
+  const expire = async (order: Order): Promise<Order | null> => {
+    const next = advance(
+      order,
+      "expired",
+      { failureReason: expiredMessage(familyOf(order).senderName) },
+      now(),
+    );
+    return (await finish(order, next)) ? next : null;
+  };
+
+  /** Cancel approval requests nobody answered in time. */
+  const expireStale = async (): Promise<void> => {
+    const t = now().getTime();
+    for (const o of await store.listByStatus(["awaiting_approval"])) {
+      if (o.approval && t - Date.parse(o.approval.requestedAt) >= APPROVAL_TTL_MS) await expire(o);
+    }
+  };
+
+  const decide = async (
+    orderId: string,
+    decision: Decision,
+    proof: string,
+  ): Promise<DecideResult> => {
+    const order = await store.get(orderId);
+    if (!order) return { ok: false, reason: "not_found" };
+    if (order.status !== "awaiting_approval" || !order.approval) {
+      return { ok: false, reason: "not_pending" };
+    }
+    if (!checkProof(ownerSecret, order, decision, proof)) return { ok: false, reason: "bad_proof" };
+    const family = familyOf(order);
+    const at = now();
+    if (at.getTime() - Date.parse(order.approval.requestedAt) >= APPROVAL_TTL_MS) {
+      const gone = await expire(order);
+      return { ok: false, reason: "expired", ...(gone ? { order: gone } : {}) };
+    }
+    const decided = { ...order.approval, decision, decidedAt: at.toISOString() };
+
+    if (decision === "declined") {
+      const next = advance(
+        order,
+        "declined",
+        { approval: decided, failureReason: declinedMessage(family.senderName) },
+        at,
+      );
+      return (await finish(order, next))
+        ? { ok: true, order: next }
+        : { ok: false, reason: "not_pending" };
+    }
+
+    // Approved. The price may be hours old: a 10-minute-old price is never paid.
+    let quote: Quote | undefined = order.quote;
+    if (!quote || at.getTime() >= Date.parse(quote.expiresAt)) {
+      try {
+        quote = await quoter.quote(order.amountNgnKobo);
+      } catch {
+        return { ok: false, reason: "no_price" }; // still pending; the sender can retry
+      }
+    }
+    // Hard limits and a freeze can still refuse after the sender's yes.
+    await refreshUsage(family);
+    const verdict = evaluateOrder({ ...order, quote }, family.rules, family.usage, {
+      senderApproved: true,
+    });
+    if (verdict.outcome !== "allow") {
+      const why = verdict.breaches
+        .filter((b) => b.layer === "hard")
+        .map((b) => b.message)
+        .join(" ");
+      const next = advance(
+        order,
+        "rejected",
+        { approval: decided, quote, failureReason: `${why} ${NOTHING_PAID}` },
+        at,
+      );
+      return (await finish(order, next))
+        ? { ok: true, order: next }
+        : { ok: false, reason: "not_pending" };
+    }
+
+    let next: Order;
+    if (requestIdIsToday(order.id, at)) {
+      next = advance(order, "approved", { approval: decided, quote }, at);
+      if (!(await store.replace(order, next))) return { ok: false, reason: "not_pending" };
+    } else {
+      // VTpass refuses a request ID from an earlier day. No money has moved, so
+      // carry the approval onto a fresh order and retire this one quietly.
+      const { approval: _drop, ...rest } = order;
+      const draft: Order = {
+        ...rest,
+        id: newOrderId(at),
+        status: "draft",
+        createdAt: at.toISOString(),
+        updatedAt: at.toISOString(),
+      };
+      const confirmed = advance(draft, "awaiting_confirmation", { quote }, at);
+      next = advance(confirmed, "approved", { approval: decided }, at);
+      const old = advance(
+        order,
+        "expired",
+        { approval: decided, failureReason: "Approved after midnight; carried onto a new order." },
+        at,
+      );
+      if (!(await store.replace(order, old))) return { ok: false, reason: "not_pending" };
+      store.put(next);
+    }
+    deps.onOrderUpdate(next);
+    await startPaying(next);
+    return { ok: true, order: next };
+  };
+
+  /** Freeze stops everything: new orders, requests waiting for approval, and payments not yet sent. */
+  const setFrozen = async (familyId: string, frozen: boolean): Promise<boolean> => {
+    const f = families.get(familyId);
+    if (!f) return false;
+    f.rules = freezeRules(f.rules, frozen);
+    if (frozen) {
+      for (const o of await pending(familyId)) {
+        await finish(o, advance(o, "rejected", { failureReason: FROZEN_STOPPED }, now()));
+      }
+      for (const o of await store.listByStatus(["paying"])) {
+        if (o.familyId === familyId) await payOut(o);
+      }
+    }
+    return true;
   };
 
   const allOrders = async () =>
@@ -297,6 +506,8 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
       await store.listByStatus([
         "approved",
         "awaiting_approval",
+        "declined",
+        "expired",
         "rejected",
         "paying",
         "paid",
@@ -310,35 +521,40 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
   const familyOrders = async (familyId: string) =>
     (await allOrders()).filter((o) => o.familyId === familyId);
 
+  /** Usage counts what's paid plus money in flight, this Lagos month. */
+  const refreshUsage = async (f: Family): Promise<void> => {
+    const month = lagosMonth(now());
+    const counted = (await familyOrders(f.familyId)).filter(
+      (o) =>
+        (o.status === "fulfilled" ||
+          FUNDS_HELD_STATUSES.includes(o.status) ||
+          o.status === "paying") &&
+        o.id.startsWith(month),
+    );
+    f.usage = {
+      month,
+      spentNgnKoboByCategory: Object.fromEntries(
+        CATEGORIES.map((c) => [
+          c,
+          counted.filter((o) => o.category === c).reduce((n, o) => n + o.amountNgnKobo, 0),
+        ]),
+      ) as Family["usage"]["spentNgnKoboByCategory"],
+      spentUsdcAtomic: counted
+        .reduce((n, o) => n + BigInt(o.quote?.amountUsdcAtomic ?? "0"), 0n)
+        .toString(),
+    };
+  };
+
   const variationCache = new Map<string, Option[]>();
 
   const ports: BotPorts = {
+    now,
     model: deps.model,
     family: async (chat) => {
       const id = chats.get(chat);
       const f = id ? families.get(id) : undefined;
       if (!f) return null;
-      // Usage counts what's paid plus money in flight, this Lagos month.
-      const month = lagosMonth();
-      const counted = (await familyOrders(f.familyId)).filter(
-        (o) =>
-          (o.status === "fulfilled" ||
-            FUNDS_HELD_STATUSES.includes(o.status) ||
-            o.status === "paying") &&
-          o.id.startsWith(month),
-      );
-      f.usage = {
-        month,
-        spentNgnKoboByCategory: Object.fromEntries(
-          CATEGORIES.map((c) => [
-            c,
-            counted.filter((o) => o.category === c).reduce((n, o) => n + o.amountNgnKobo, 0),
-          ]),
-        ) as Family["usage"]["spentNgnKoboByCategory"],
-        spentUsdcAtomic: counted
-          .reduce((n, o) => n + BigInt(o.quote?.amountUsdcAtomic ?? "0"), 0n)
-          .toString(),
-      };
+      await refreshUsage(f);
       return f;
     },
     lookup: (input) => lookupCustomer(vtpass, input),
@@ -363,16 +579,11 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
     submit: async (order) => {
       store.put(order);
       if (order.status === "awaiting_approval") {
-        console.log(
-          `order ${order.id}: approval card for the sender (Phase 11): ${order.approval?.reason}`,
-        );
+        console.log(`order ${order.id}: waiting for ${familyOf(order).senderName}'s approval`);
         return;
       }
       if (order.status !== "approved") return;
-      // Phase 8 stand-in: the family account pays settlement, then the executor buys.
-      const paying = advance(order, "paying");
-      if (!(await store.replace(order, paying))) return;
-      track(payOut(paying).catch((e) => alert(`order ${order.id}: ${String(e)}`)));
+      await startPaying(order);
     },
     recent: async (familyId, n) => (await familyOrders(familyId)).slice(0, n),
   };
@@ -384,7 +595,47 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
       : null;
   ports.receiptLink = receiptLink;
 
+  const sender: SenderSide = {
+    senderName: (familyId) => families.get(familyId)?.senderName ?? null,
+    approvals: async (familyId) => {
+      await expireStale();
+      return (await pending(familyId)).map(approvalCard);
+    },
+    decide,
+    signAsDemoOwner: async (orderId, decision) => {
+      const o = await store.get(orderId);
+      return o?.approval ? ownerProof(ownerSecret, o, decision) : null;
+    },
+    setFrozen,
+    applyPreset: (familyId, preset) => {
+      const f = families.get(familyId);
+      if (!f) return false;
+      f.rules = applyPreset(f.rules, preset);
+      return true;
+    },
+    overview: async (familyId) => {
+      const f = families.get(familyId);
+      if (!f) return null;
+      return {
+        senderName: f.senderName,
+        frozen: f.rules.frozen,
+        rulesVersion: f.rules.version,
+        approvalAboveNaira:
+          f.rules.approvalAboveNgnKobo === null ? null : f.rules.approvalAboveNgnKobo / 100,
+        categories: CATEGORIES.map((c) => ({
+          category: c,
+          enabled: f.rules.categories[c].enabled,
+          capNaira:
+            f.rules.categories[c].monthlyCapNgnKobo === null
+              ? null
+              : (f.rules.categories[c].monthlyCapNgnKobo as number) / 100,
+        })),
+      };
+    },
+  };
+
   const tick = async () => {
+    await expireStale();
     for (const o of await store.listByStatus(["paying"])) await payOut(o);
     for (const r of await executor.sweep())
       if (r.waiting) waited(r.status as Order["status"], r.orderId);
@@ -410,6 +661,7 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
     tick,
     orders: allOrders,
     floorKobo: deps.floatFloorNgn * 100,
+    sender,
     settled: async () => {
       while (inflight.size > 0) await Promise.allSettled([...inflight]);
     },

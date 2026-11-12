@@ -1,5 +1,5 @@
 import { formatNaira, formatUsdc, type Receipt } from "@earmark/shared";
-import { EXPLORER, type Network, type TxCheck } from "./receipts.js";
+import { EXPLORER, LOCAL_RPC, type Network, type TxCheck } from "./receipts.js";
 
 // One public receipt. It shows only what the contract holds: no names, no
 // phone or meter numbers, no electricity token. The customer reference
@@ -75,7 +75,11 @@ export function ReceiptCard({
         {txHash && (
           <>
             {" · "}
-            <a href={`${EXPLORER[network]}/txns/${txHash}`}>on-chain transaction</a>
+            {LOCAL_RPC ? (
+              "local demo transaction"
+            ) : (
+              <a href={`${EXPLORER[network]}/txns/${txHash}`}>on-chain transaction</a>
+            )}
             {check === "checking" && " · checking…"}
             {check && check !== "checking" && check.verified && (
               <span style={S.ok}> · ✓ verified on NEAR {network}</span>

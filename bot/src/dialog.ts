@@ -573,6 +573,7 @@ const STATUS_LABEL: Partial<Record<Order["status"], string>> = {
   purchasing: "paying",
   rejected: "not allowed",
   declined: "declined",
+  expired: "expired",
 };
 
 function reset(s: Session): Session {

@@ -1,8 +1,67 @@
 # Earmark
 
-Send money home with rules. Someone abroad funds a family account from any chain and signs spending rules once. The recipient then asks an AI assistant, in English or Pidgin, to pay bills inside those rules: prepaid electricity, airtime, data and TV.
+**What it is.** Send money home with rules. Someone abroad funds a family account from any chain and signs spending rules once. The recipient then asks an AI assistant, in English or Pidgin, to pay household bills inside those rules: prepaid electricity, airtime, data and TV. Every payment gets a public receipt on NEAR with no personal data.
 
-> Status: in active development for the NEAR hackathon (tracks `realworld` and `agents`). This README grows into the full judge guide as the build lands.
+**The problem.** Nigerians abroad sent home $21.8B in 2025, and senders can't control how it gets spent. Cash sent home can't be limited to bills, and a bill paid by the sender needs the sender awake, online and on the phone. Earmark lets the sender set the rules once and lets the recipient do the asking.
+
+**Status.** Built for the NEAR hackathon (tracks `realworld` and `agents`). The recipient side works end to end (chat → rules → biller → receipt → public page). The money side (funding, the family account paying settlement, refunds on-chain) and the sender web app are not built yet: see [What is real and what is not](#what-is-real-and-what-is-not).
+
+## Try it in 10 minutes, no keys, no money
+
+Needs Node 24+ (`nvm use`), pnpm 12 (`corepack enable`) and `make`. Nothing else: no accounts, no `.env`.
+
+```sh
+make demo
+```
+
+| Do this                                                         | See this                                                                                                                                                       |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make demo`, then open the link it prints                       | A page with three panes: sender app, recipient chat, and the chain                                                                                             |
+| In the recipient chat, click **abeg buy 5k light for my meter** | The bot looks up the meter, shows the owner's name (MAMA NGOZI), ₦5,000 (about $3.77) and asks for YES, in Pidgin because you wrote "abeg"                     |
+| Click **yes**                                                   | "I dey pay am", then within seconds the electricity token, units and a receipt link                                                                            |
+| Look at the chain pane                                          | The receipt: amount, bill type, time, with "✓ verified" from the page's own check of the transaction. No name, phone or meter number                           |
+| Type `buy 600k light for my meter`                              | Refused in code: more than ₦500,000 in one payment                                                                                                             |
+| Type `buy 25k light for my meter`, then **yes**                 | The bot says it needs Ada's OK first. The sender pane shows a card with the amount, the rule that tripped and **Approve** / **Decline**; nothing is bought yet |
+| Click **Approve**                                               | The recipient hears "Ada said yes", then the token and receipt. **Decline** instead: "Ada declined this payment. Nothing was paid."                            |
+| Click **Freeze everything**, then ask for any bill              | Refused: "The account is frozen by the sender." A request waiting for approval is cancelled too                                                                |
+| Click **yes** twice, fast                                       | One bill; the second YES is told it is already on its way                                                                                                      |
+| `make check`                                                    | Lint, secrets audit, build and all TypeScript tests, including the failure drills                                                                              |
+| `pnpm test:contracts`                                           | The receipts contract's unit tests and a near-workspaces sandbox run (needs Rust and cargo-near, see below)                                                    |
+
+## What is real and what is not
+
+| Part                                                                                                 | `make demo`                                                     | With keys (`pnpm start:bot`)                                         |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Order rules, quotes, confirmation, executor, refunds logic, receipts, Pidgin, rate limit, monitoring | Real code                                                       | Real code                                                            |
+| VTpass bill purchase                                                                                 | Simulated, one bill per request, instant                        | **Real VTpass sandbox** purchases and lookups                        |
+| Receipts contract                                                                                    | A local stand-in that answers the same RPC calls the page makes | **Real contract on NEAR testnet**, written by the service account    |
+| Understanding messages                                                                               | Plain rules; far less flexible than the model                   | **NEAR AI Cloud** model (`deepseek/deepseek-v4.1-flash`)             |
+| Naira rate                                                                                           | Fixed ₦1,346 per $                                              | Live Coinbase and open.er-api, lower of the two, minus a 1.5% spread |
+| Chat                                                                                                 | A web chat in the judge page                                    | Telegram (live) and WhatsApp through the Twilio sandbox              |
+| Family paying settlement, refunds                                                                    | Simulated                                                       | Simulated (Phase 8 needs mainnet accounts and is not built)          |
+| Sender approval card and decision                                                                    | Real flow in the sender pane; the demo owner signs              | Same; the real sender signs in their own wallet (Phase 12)           |
+| Sender web app (sign-in, funding, rule editing)                                                      | A stub page                                                     | A stub page (Phase 12)                                               |
+
+No mainnet transaction exists yet. The receipts contract is live on testnet at [`earmark-receipts-9e9730f1.testnet`](https://testnet.nearblocks.io/address/earmark-receipts-9e9730f1.testnet) with real receipts from VTpass sandbox purchases; the page verifies each one against the archival RPC. Mainnet deployment waits on the mainnet accounts in `.env.example`.
+
+## NEAR pieces and what each does
+
+| Piece                                | Status                                                           | What it does here                                                                                                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Receipts contract (Rust, near-sdk 5) | Built, tested, on testnet                                        | One write-once receipt per order. Only the service account writes; anyone reads. No personal data: each string field is format-checked and the customer reference is a salted hash |
+| NEP-297 events                       | In use                                                           | Every receipt emits `receipt_recorded`; the public page checks the event for the order in the transaction, so a link can't fake a receipt                                          |
+| NEAR AI Cloud                        | In use                                                           | The model reads each chat message into fields. It never approves, prices or confirms anything                                                                                      |
+| NEAR RPC (fastnear, archival)        | In use                                                           | The public page reads receipts and checks transactions straight from the chain, with no backend                                                                                    |
+| NEAR Intents Agent API               | Spiked (`pnpm spike:agent-api`), policy and refusal code written | Holds each family's account and policy: the only allowed destination is our settlement account. Not yet wired into the order flow                                                  |
+| 1Click deposits                      | Spiked, not wired                                                | A fresh deposit address per top-up, from any chain                                                                                                                                 |
+
+## Safety, in one list
+
+- The model only extracts fields. Only a message that is plainly "yes" confirms, matched by a regex, and only while a summary is showing.
+- Rules are checked in code after YES. A hard limit or a frozen account refuses; a category rule sends a card to the sender, who must approve or decline. Only a decision signed for that order counts, a stale price is re-quoted, and an unanswered request is cancelled after 24 hours.
+- A 10-minute-old price is never paid. The float guard stops new orders when the VTpass balance is low.
+- One order ID is never bought twice: state is saved before VTpass is called, and then the order is only requeried.
+- Failure drills (VTpass down, float empty, wrong meter, double YES, Agent API error, RPC down…) each end in a clear message plus a refund or a retry.
 
 ## Repository layout
 
@@ -18,7 +77,7 @@ Send money home with rules. Someone abroad funds a family account from any chain
 | `apps/sender-web`    | Sender web app: rules, top-ups, receipts feed and approvals                               |
 | `scripts`            | Operational scripts, including the account and key smoke check                            |
 
-## Build and test
+## Developer commands
 
 Requirements: Node 24+ (`nvm use`), pnpm 12, Rust stable with the `wasm32-unknown-unknown` target, and [cargo-near](https://github.com/near/cargo-near) 0.22 (`cargo install --locked cargo-near`). The contract must be built with cargo-near: a plain `cargo build` wasm deploys but cannot report its errors.
 
@@ -85,8 +144,16 @@ For WhatsApp, run a tunnel to `BOT_PORT`, set `BOT_PUBLIC_URL` to it, and set `<
 
 ## Privacy
 
-Names, phone numbers and meter numbers never go on-chain. Each receipt carries an HMAC-SHA256 of the customer reference, keyed by a per-family secret that stays in our database.
+Names, phone numbers, meter numbers and tokens never go on-chain. Each receipt carries an HMAC-SHA256 of the customer reference, keyed by a per-family secret that stays in our database. The judge view masks long numbers in the chat.
 
-## Baseline
+## Baseline and disclosure
 
-No code from before the hackathon. Open-source libraries in use: zod, React, Vite, near-sdk-rs, vitest, Biome, `@near-intents-agent-api/sdk` and near-api-js. The Agent API flows follow the patterns documented in the NEAR-Intents-Agent-API SDK README and examples repository.
+- **No code from before the hackathon.** Open-source libraries in use: zod, React, Vite, near-sdk-rs, near-workspaces, vitest, Biome, `@near-intents-agent-api/sdk` and near-api-js. The Agent API flows follow the patterns in the NEAR-Intents-Agent-API SDK README and examples repository.
+- **Our role.** Earmark is the naira settlement partner: families pay USDC to our settlement account, and we pay the bill from our VTpass wallet in naira. The VTpass float is ours, topped up in naira.
+- **Mocked in `make demo`:** VTpass, the chain, the model and the naira rate (table above). The simulated VTpass delivers every bill; the real one can refuse, delay or reverse, which the drills cover.
+- **Not built yet:** the money flow (Phase 8), the owner signing approvals in a wallet and the sender web app (Phase 12), the OutLayer attested-purchase stretch (Phase 14), and the hosted demo. The real-family pilot has not run, so there are no pilot numbers here.
+- **Other projects:** none is named yet; if anyone on the team also works on another hackathon project, it will be listed here.
+
+## License
+
+[MIT](LICENSE).

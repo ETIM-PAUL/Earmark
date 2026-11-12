@@ -6,6 +6,7 @@ import {
   EXPLORER,
   getFamilyReceipts,
   getReceipt,
+  LOCAL_RPC,
   parseNetwork,
   type TxCheck,
   verifyReceiptTx,
@@ -117,8 +118,15 @@ function Page() {
       {body}
       <p style={{ ...S.muted, marginTop: 24 }}>
         Read live from contract{" "}
-        <a href={`${EXPLORER[network]}/address/${contractId}`}>{contractId || "(not set)"}</a> on
-        NEAR {network}. Names, phone numbers, meter numbers and tokens are never on-chain.
+        {LOCAL_RPC ? (
+          <>{contractId} on a local demo chain, not NEAR</>
+        ) : (
+          <>
+            <a href={`${EXPLORER[network]}/address/${contractId}`}>{contractId || "(not set)"}</a>{" "}
+            on NEAR {network}
+          </>
+        )}
+        . Names, phone numbers, meter numbers and tokens are never on-chain.
       </p>
     </main>
   );

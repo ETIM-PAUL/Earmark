@@ -46,10 +46,17 @@ const SENTENCES: Record<string, string> = {
   "This phone number is not on the approved list.": "This phone number no dey the approved list.",
   "We couldn't move the money for this bill.": "We no fit move the money for this bill.",
   "Nothing left the account.": "Nothing comot from the account.",
+  "Nothing was paid.": "Nothing comot.",
+  "Please ask again if you still need it.": "Abeg ask again if you still need am.",
 };
 
 /** Sentences with amounts in them, from evaluateOrder. */
 const PATTERNS: [RegExp, string][] = [
+  [/^(.+) declined this payment\.$/, "$1 don decline this payment."],
+  [
+    /^(.+) didn't answer in time, so this payment was cancelled\.$/,
+    "$1 never answer for time, so I don cancel this payment.",
+  ],
   [
     /^(\$[\d.,]+) is above the (\$[\d.,]+) per-payment maximum\.$/,
     "$1 pass the $2 wey one payment fit be.",

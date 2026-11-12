@@ -75,6 +75,10 @@ export const COPY = {
     "This needs {sender}'s OK first: {why} I've asked them, and I'll tell you when they answer.",
     "{sender} go first approve this one: {why} I don ask am, I go tell you when e answer.",
   ),
+  approvedPaying: t(
+    "{sender} said yes. Paying now. I'll message you when it's done.",
+    "{sender} don talk yes. I dey pay am now. I go message you once e done.",
+  ),
   rejected: t("I can't pay this one: {why}", "I no fit pay this one: {why}"),
   fulfilled: t("Done! {what} paid.", "E don do! {what} don pay."),
   token: t("Your token: {token}", "Your token: {token}"),

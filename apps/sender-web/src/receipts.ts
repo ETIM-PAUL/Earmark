@@ -21,6 +21,17 @@ export const EXPLORER: Record<Network, string> = {
   testnet: "https://testnet.nearblocks.io",
 };
 
+/**
+ * `?rpc=<url>` points the page at a local chain instead of NEAR, for the
+ * keyless demo (make demo). Without it the page only talks to fastnear.
+ */
+export const LOCAL_RPC: string | null = (() => {
+  // Typed by hand: this file also runs in Node (drills), which has no `location`.
+  const loc = (globalThis as { location?: { search: string } }).location;
+  const v = loc ? new URLSearchParams(loc.search).get("rpc") : null;
+  return v && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(v) ? v.replace(/\/$/, "") : null;
+})();
+
 export function parseNetwork(v: string | null | undefined): Network {
   return v === "mainnet" ? "mainnet" : "testnet";
 }
@@ -30,7 +41,7 @@ const toBase64 = (s: string) => btoa(String.fromCharCode(...new TextEncoder().en
 type RpcError = { cause?: { name?: string }; message?: string };
 
 async function rpc<T>(url: string, method: string, params: object): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(LOCAL_RPC ?? url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: "earmark", method, params }),

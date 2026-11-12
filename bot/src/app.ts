@@ -100,6 +100,15 @@ export function createBot(opts: BotOptions) {
       const msg = updateMessage(o, langOf(chat), null);
       if (msg) out.push(msg);
     }
+    // The sender said yes to an exception: tell the recipient it's on its way.
+    if (o.status === "approved" && o.approval?.decision === "approved") {
+      const key = `${o.id}:approved`;
+      if (!announced.has(key)) {
+        announced.add(key);
+        const sender = demo.sender.senderName(o.familyId) ?? "";
+        out.push(say(langOf(chat), "approvedPaying", { sender }));
+      }
+    }
     const link = demo.receiptLink(o);
     if (link && !announced.has(`${o.id}:receipt`)) {
       announced.add(`${o.id}:receipt`);

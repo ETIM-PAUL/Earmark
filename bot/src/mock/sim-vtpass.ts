@@ -1,6 +1,6 @@
 import { VtpassClient } from "@earmark/billers";
 
-// Test-only. Excluded from the build.
+// Used by the failure drills and by the keyless local demo (make demo).
 //
 // A VTpass that keeps state, so the drills can break it the ways the real
 // one breaks: down, slow, out of float, failing a bill, or paying a bill
@@ -80,8 +80,10 @@ export function simVtpass(init: Partial<SimState> = {}) {
           requestId: id,
           amount,
           transaction_date: new Date().toISOString(),
-          token: "Token : 1234 5678 9012 3456 7890",
-          units: "53.2 kWh",
+          // Only electricity comes with a token.
+          ...(String(body.serviceID).includes("electric")
+            ? { token: "Token : 1234 5678 9012 3456 7890", units: "53.2 kWh" }
+            : {}),
           content: { transactions: { status: "delivered", transactionId: String(txn++) } },
         };
         delivered.set(id, tx);

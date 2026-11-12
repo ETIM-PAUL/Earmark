@@ -14,6 +14,7 @@ import { Telegram, WhatsApp } from "./channels.js";
 import { demoPorts } from "./demo.js";
 import { NearAiModel } from "./model.js";
 import { Monitor } from "./monitor.js";
+import { senderRoute } from "./sender-api.js";
 
 // The assistant: Telegram (long polling) and WhatsApp (Twilio webhook) in
 // front of one dialog engine. Demo mode until the order service lands.
@@ -119,6 +120,7 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 // ── HTTP: health and the Twilio webhook ───────────────────────────────
 
 const server = createServer((req, res) => {
+  if (senderRoute(req, res, { demo, webUrl })) return;
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
