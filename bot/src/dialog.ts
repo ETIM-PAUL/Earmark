@@ -10,6 +10,7 @@ import {
   hashCustomerRef,
   type MonthUsage,
   newOrderId,
+  normalizeCustomerRef,
   type Order,
   type Quote,
 } from "@earmark/shared";
@@ -44,6 +45,52 @@ export interface SavedRef {
   label: string;
   meterType?: "prepaid" | "postpaid";
 }
+
+/**
+ * The phones, meters and smartcards the owner added for a category. Airtime
+ * and data share one list of phones; the recipient's own phone is always on it.
+ */
+export function knownRefs(family: Family, category: Category): string[] {
+  if (category === "airtime" || category === "data") {
+    return [
+      family.recipientPhone,
+      ...family.saved.filter((r) => r.category === "airtime").map((r) => r.ref),
+    ];
+  }
+  return family.saved.filter((r) => r.category === category).map((r) => r.ref);
+}
+
+/** The saved numbers a person can name in a category. Airtime and data share the phones. */
+function savedFor(family: Family, cat: Category): SavedRef[] {
+  const want = cat === "data" ? "airtime" : cat;
+  return family.saved.filter((r) => r.category === want);
+}
+
+/**
+ * Find a saved number the message names by its label, like "the office
+ * meter" or "Uncle Tunde". The whole label or its first word counts, and a
+ * word that fits two labels counts for neither.
+ */
+function byLabel(family: Family, cat: Category, text: string): string | null {
+  const saved = savedFor(family, cat);
+  const t = text.toLowerCase();
+  const hits = new Set<string>();
+  for (const r of saved) {
+    const label = r.label.toLowerCase().trim();
+    const first = label.split(/\s+/)[0] ?? "";
+    const mentions = (w: string) =>
+      w.length >= 3 &&
+      new RegExp(`(^|[^\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^\\p{L}]|$)`, "u").test(
+        t,
+      );
+    const firstIsUnique = saved.filter((o) => o.label.toLowerCase().startsWith(first)).length === 1;
+    if (mentions(label) || (firstIsUnique && mentions(first))) hits.add(r.ref);
+  }
+  return hits.size === 1 ? ([...hits][0] ?? null) : null;
+}
+
+const sameRef = (cat: Category, a: string, b: string) =>
+  normalizeCustomerRef(cat, a) === normalizeCustomerRef(cat, b);
 
 export interface Family {
   familyId: FamilyId;
@@ -193,6 +240,12 @@ export class Dialog {
       return this.reply(s, say(s.lang, "sayYes"));
     }
     if (s.asking === "bundle" && s.options && x.choice) return this.choose(s, family, x.choice);
+    // "the office meter", "Uncle Tunde": a name the sender gave a saved number.
+    const named = x.category ?? s.draft.category;
+    if (named && (!x.customerRef || x.customerRef.toUpperCase() === "SELF")) {
+      const ref = byLabel(family, named, text);
+      if (ref) x = { ...x, customerRef: ref };
+    }
     this.merge(s, x);
     return this.next(s, family);
   }
@@ -255,6 +308,12 @@ export class Dialog {
           cat === "electricity" ? "badMeter" : cat === "tv" ? "badSmartcard" : "badPhone",
         );
       }
+      const kind = cat === "electricity" ? "meter" : cat === "tv" ? "smartcard" : "phone number";
+      const listed = knownRefs(family, cat).some((r) => sameRef(cat, r, norm));
+      if (!listed) {
+        // Only what the owner added can be paid. Never keep a number we refused.
+        return say(s.lang, "notOnList", { kind, sender: family.senderName });
+      }
       d.customerRef = norm;
       d.customerName = undefined;
     }
@@ -296,12 +355,39 @@ export class Dialog {
 
     // Phones first: the number usually tells us the network.
     const phoneBill = cat === "airtime" || cat === "data";
-    if (phoneBill && !d.customerRef) return this.ask(s, "customerRef", say(lang, "askPhone"));
+    if (phoneBill && !d.customerRef) {
+      const names = savedFor(family, cat).map((r) => r.label);
+      if (names.length === 0) return this.ask(s, "customerRef", say(lang, "askPhone"));
+      return this.ask(
+        s,
+        "customerRef",
+        this.which(s, family, "phone number", ["your own", ...names]),
+      );
+    }
+    if (!phoneBill && !d.customerRef && !d.billerCode) {
+      // Which saved meter or decoder? Its company comes with it.
+      const names = savedFor(family, cat).map((r) => r.label);
+      if (names.length > 1) {
+        return this.ask(
+          s,
+          "customerRef",
+          this.which(s, family, cat === "electricity" ? "meter" : "smartcard", names),
+        );
+      }
+    }
     if (!d.billerCode) {
       const key = cat === "electricity" ? "askDisco" : cat === "tv" ? "askTv" : "askNetwork";
       return this.ask(s, "provider", say(lang, key));
     }
     if (!d.customerRef) {
+      const names = savedFor(family, cat).map((r) => r.label);
+      if (names.length > 0) {
+        return this.ask(
+          s,
+          "customerRef",
+          this.which(s, family, cat === "electricity" ? "meter" : "smartcard", names),
+        );
+      }
       const key = cat === "electricity" ? "askMeter" : "askSmartcard";
       return this.ask(s, "customerRef", say(lang, key));
     }
@@ -437,7 +523,9 @@ export class Dialog {
       return turn;
     }
 
-    const verdict = evaluateOrder(order, family.rules, family.usage);
+    const verdict = evaluateOrder(order, family.rules, family.usage, {
+      knownCustomerRefs: knownRefs(family, order.category),
+    });
     let reply: string;
     if (verdict.outcome === "allow") {
       order = advance(order, "approved", {}, at);
@@ -510,6 +598,13 @@ export class Dialog {
       return `• ${day} · ${CATEGORY_LABEL[o.category]} ${formatNaira(o.amountNgnKobo)} · ${maskRef(o.customerRef)} · ${STATUS_LABEL[o.status] ?? o.status}${link ? `\n  ${link}` : ""}`;
     });
     return `${say(lang, "receiptsHead")}\n${lines.join("\n")}`;
+  }
+
+  /** Ask which saved number, by the names the sender gave them. */
+  private which(s: Session, family: Family, kind: string, names: string[]): string {
+    const list =
+      names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}` : (names[0] ?? "");
+    return say(s.lang, "askWhich", { kind, names: list, sender: family.senderName });
   }
 
   private selfRef(family: Family, d: Draft): string | null {

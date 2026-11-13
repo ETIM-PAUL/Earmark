@@ -993,3 +993,26 @@ fieldset.quick {
   padding: 0;
   min-width: 0;
 }
+
+/* ── Numbers the family can pay for ── */
+.numbers-group {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 40rem;
+}
+.group-h {
+  font: 500 var(--step-1) / 1.3 var(--font-display);
+}
+.numbers-group .saved {
+  max-width: none;
+}
+.numbers-group .saved li:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+.numbers-group .empty {
+  padding: 1rem 1.5rem;
+}
+.stack > .btn,
+.stack > .actions {
+  justify-self: start;
+}

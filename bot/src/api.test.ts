@@ -174,8 +174,13 @@ describe("a sender's family", { timeout: 30_000 }, () => {
       budget: { monthlyUsd: "100", spentUsd: "$0.00", leftUsd: "$100.00" },
     });
     expect(state.json.overview.saved).toEqual([
-      { category: "electricity", label: "home meter", ref: "1111…1111" },
-      { category: "tv", label: "house DStv", ref: "1212…1212" },
+      {
+        id: expect.stringMatching(/^n_/),
+        category: "electricity",
+        label: "home meter",
+        ref: "1111…1111",
+      },
+      { id: expect.stringMatching(/^n_/), category: "tv", label: "house DStv", ref: "1212…1212" },
     ]);
     const cats = Object.fromEntries(
       state.json.overview.categories.map((c: Json) => [c.category, c]),
@@ -704,5 +709,158 @@ describe("a family of several relatives", { timeout: 40_000 }, () => {
       bola.json.token,
     );
     expect(no.json).toEqual({ ok: true, status: "declined" });
+  });
+});
+
+describe("numbers the family may pay for", { timeout: 40_000 }, () => {
+  const stateOf = async (id: string, t: string) =>
+    (await call("GET", `/api/families/${id}/state`, undefined, t)).json;
+  const add = (id: string, t: string, body: object) =>
+    call("POST", `/api/families/${id}/numbers`, body, t);
+  const PHONE = { kind: "phone", ref: "0802 123 4567", label: "Uncle Tunde" };
+
+  it("adds a phone at once, and the list shows it masked", async () => {
+    const ada = await signUp("Ada Okafor");
+    const id = (await call("POST", "/api/families", FAMILY, ada.json.token)).json.familyId;
+    const r = await add(id, ada.json.token, PHONE);
+    expect(r.status).toBe(200);
+    const saved = (await stateOf(id, ada.json.token)).overview.saved;
+    expect(saved).toContainEqual({
+      id: expect.stringMatching(/^n_/),
+      category: "airtime",
+      label: "Uncle Tunde",
+      ref: "0802…4567",
+    });
+  });
+
+  it("adds a meter and a smartcard with their company, and refuses bad input", async () => {
+    const ada = await signUp("Ada Okafor");
+    const id = (await call("POST", "/api/families", FAMILY, ada.json.token)).json.familyId;
+    const t = ada.json.token;
+    expect(
+      (await add(id, t, { kind: "meter", ref: "45031234567", company: "Eko", label: "Shop" }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await add(id, t, { kind: "smartcard", ref: "1313131313", company: "GOtv", label: "Flat" }))
+        .status,
+    ).toBe(200);
+    // A bad number, an unknown company, a repeat, and the recipient's own phone.
+    expect((await add(id, t, { ...PHONE, ref: "12345" })).status).toBe(400);
+    expect(
+      (await add(id, t, { kind: "meter", ref: "45031234567", company: "Nope", label: "X" })).status,
+    ).toBe(400);
+    expect(
+      (await add(id, t, { kind: "meter", ref: "45031234567", company: "Eko", label: "Shop" }))
+        .status,
+    ).toBe(400);
+    expect((await add(id, t, { ...PHONE, ref: "0803 123 4567" })).status).toBe(400);
+  });
+
+  it("holds the list to a limit", async () => {
+    const ada = await signUp("Ada Okafor");
+    const id = (await call("POST", "/api/families", FAMILY, ada.json.token)).json.familyId;
+    const t = ada.json.token;
+    // The family starts with one meter; ten fit.
+    for (let i = 0; i < 9; i++) {
+      const ref = `4503123456${i}`;
+      expect(
+        (await add(id, t, { kind: "meter", ref, company: "Eko", label: `M${i}` })).status,
+      ).toBe(200);
+    }
+    const over = await add(id, t, {
+      kind: "meter",
+      ref: "45031234569",
+      company: "Eko",
+      label: "One more",
+    });
+    expect(over.status).toBe(400);
+    expect(over.json.error).toMatch(/full/);
+  });
+
+  it("the assistant refuses a number that isn't on the list, and accepts it once added", async () => {
+    const ada = await signUp("Ada Okafor");
+    const id = (await call("POST", "/api/families", FAMILY, ada.json.token)).json.familyId;
+    await say(id, "buy 1k airtime for 08029999999");
+    await until(async () =>
+      (await chat(id))
+        .map((l) => l.text)
+        .join("\n")
+        .includes("isn't on the list Ada set up")
+        ? true
+        : false,
+    );
+    expect((await stateOf(id, ada.json.token)).orders).toEqual([]);
+
+    await add(id, ada.json.token, { kind: "phone", ref: "08029999999", label: "Auntie" });
+    await say(id, "buy 1k airtime for 08029999999");
+    await until(async () => (await chat(id)).at(-1)?.text.includes("YES"));
+    expect((await chat(id)).at(-1)?.text).toMatch(/Phone 0802…9999/);
+  });
+
+  it("with two signatures required, adding a number waits for them; removing doesn't", async () => {
+    const ada = await signUp("Ada Okafor");
+    const bola = await signUp("Bola Adeyemi");
+    const id = (await call("POST", "/api/families", FAMILY, ada.json.token)).json.familyId;
+    const { json: code } = await call(
+      "POST",
+      `/api/families/${id}/members/invite`,
+      {},
+      ada.json.token,
+    );
+    await call("POST", "/api/join", { code: code.code }, bola.json.token);
+    await call("POST", `/api/families/${id}/policy`, { required: 2 }, ada.json.token);
+
+    const r = await add(id, ada.json.token, PHONE);
+    expect(r.status).toBe(202);
+    expect(r.json).toMatchObject({ waiting: true, needed: 2 });
+    const phones = async () =>
+      (await stateOf(id, ada.json.token)).overview.saved.filter(
+        (s: Json) => s.category === "airtime",
+      );
+    expect(await phones()).toEqual([]);
+
+    for (const who of [ada, bola]) {
+      const { json: opts } = await call(
+        "POST",
+        `/api/families/${id}/proposals/${r.json.proposalId}/options`,
+        {},
+        who.json.token,
+      );
+      const signed = await call(
+        "POST",
+        `/api/families/${id}/proposals/${r.json.proposalId}/sign`,
+        { response: who.phone.assert(opts) },
+        who.json.token,
+      );
+      expect(signed.status).toBe(200);
+    }
+    const [listed] = await phones();
+    expect(listed.label).toBe("Uncle Tunde");
+
+    // Any one relative can take it off, straight away.
+    const gone = await call(
+      "POST",
+      `/api/families/${id}/numbers/remove`,
+      { id: listed.id },
+      bola.json.token,
+    );
+    expect(gone.status).toBe(200);
+    expect(await phones()).toEqual([]);
+    expect(
+      (await call("POST", `/api/families/${id}/numbers/remove`, { id: listed.id }, bola.json.token))
+        .status,
+    ).toBe(404);
+  });
+
+  it("is closed to people outside the family", async () => {
+    const ada = await signUp("Ada Okafor");
+    const eve = await signUp("Eve Ibe");
+    const id = (await call("POST", "/api/families", FAMILY, ada.json.token)).json.familyId;
+    expect((await add(id, eve.json.token, PHONE)).status).toBe(404);
+    expect(
+      (await call("POST", `/api/families/${id}/numbers/remove`, { id: "n_x" }, eve.json.token))
+        .status,
+    ).toBe(404);
   });
 });

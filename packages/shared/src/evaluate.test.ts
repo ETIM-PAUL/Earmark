@@ -135,3 +135,47 @@ describe("evaluateOrder", () => {
     expect(lagosMonth(new Date("2026-11-30T23:30:00Z"))).toBe("202612");
   });
 });
+
+describe("numbers the owner added", () => {
+  const listedOrder = {
+    category: "airtime" as const,
+    customerRef: "08029999999",
+    amountNgnKobo: 1_000_00,
+    quote: {
+      rateNgnPerUsd: "1325.00",
+      amountUsdcAtomic: "754717",
+      quotedAt: "2026-11-12T12:00:00.000Z",
+      expiresAt: "2026-11-12T12:10:00.000Z",
+    },
+  };
+  it("rejects a number that isn't listed, even with the sender's approval", () => {
+    for (const senderApproved of [false, true]) {
+      const v = evaluateOrder(listedOrder, demoRules(), empty, {
+        senderApproved,
+        knownCustomerRefs: ["08031234567"],
+      });
+      expect(v).toMatchObject({
+        outcome: "reject",
+        breaches: [{ layer: "hard", code: "customer_not_listed" }],
+      });
+    }
+  });
+
+  it("allows a listed number, however it is written", () => {
+    const v = evaluateOrder(
+      { ...listedOrder, customerRef: "+234 802 999 9999" },
+      demoRules(),
+      empty,
+      {
+        knownCustomerRefs: ["0802 999 9999"],
+      },
+    );
+    expect(v.outcome).toBe("allow");
+  });
+
+  it("an empty list refuses everything", () => {
+    expect(evaluateOrder(listedOrder, demoRules(), empty, { knownCustomerRefs: [] }).outcome).toBe(
+      "reject",
+    );
+  });
+});

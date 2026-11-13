@@ -3,13 +3,7 @@ import { api } from "../api.js";
 import type { ChangeResult, Invite, Overview, Team } from "../types.js";
 import { InviteCard } from "./Assistant.js";
 import { waitingNotice } from "./Home.js";
-
-const KIND: Record<string, string> = {
-  electricity: "Meter",
-  tv: "Decoder",
-  airtime: "Phone",
-  data: "Phone",
-};
+import { Numbers } from "./Numbers.js";
 
 export function Family({
   familyId,
@@ -39,24 +33,10 @@ export function Family({
       </div>
 
       <section aria-labelledby="rec-h" className="stack">
-        <h2 id="rec-h">Who you're paying for</h2>
-        <p>
-          Recipient <strong className="num">{o.recipientPhone}</strong>
+        <h2 id="rec-h">The recipient's chat</h2>
+        <p className="fine">
+          Share the link so your family can talk to the assistant on Telegram or WhatsApp.
         </p>
-        {o.saved.length > 0 ? (
-          <ul className="saved">
-            {o.saved.map((s) => (
-              <li key={`${s.category}${s.ref}`}>
-                <strong>{s.label}</strong>
-                <span className="fine">
-                  {KIND[s.category] ?? "Number"} <span className="num">{s.ref}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="fine">No saved meters or decoders. They can type a number in the chat.</p>
-        )}
         {team.isOwner &&
           (fresh ? (
             <InviteCard invite={fresh} />
@@ -71,6 +51,8 @@ export function Family({
           </p>
         )}
       </section>
+
+      <Numbers familyId={familyId} overview={o} onChange={onChange} />
 
       <TeamCard familyId={familyId} team={team} onChange={onChange} />
     </div>

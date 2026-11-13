@@ -156,8 +156,9 @@ function CreateFamily({
       <section className="stack">
         <h2>2. Their meters and decoders</h2>
         <p className="fine">
-          Optional. Saved numbers let them say "my meter" instead of typing it. The demo meter
-          1111111111111 and decoder 1212121212 work in this build.
+          The assistant only pays for numbers you add. Name each one, like Home or Office, so they
+          can say "the office meter". You can add more phones, meters and decoders later. The demo
+          meter 1111111111111 and decoder 1212121212 work in this build.
         </p>
         {meters.map((m) => (
           <fieldset key={m.key} className="row">

@@ -106,11 +106,27 @@ describe("Phase 16 failure drills", () => {
     expect(r.sim.pays.size).toBe(0);
   });
 
-  it("wrong meter: asked again, nothing charged", async () => {
+  it("a meter the biller doesn't know: asked again, nothing charged", async () => {
     const r = rig();
     await r.join();
+    // The owner listed it, but VTpass has no such meter.
+    r.demo.sender.addNumber(r.familyId, {
+      category: "electricity",
+      billerCode: "ikeja-electric",
+      ref: "22222222222",
+      label: "typo meter",
+      meterType: "prepaid",
+    });
     expect(await r.say(WRONG_METER)).toMatch(/couldn't find that meter number/);
     expect(await r.orders()).toHaveLength(0);
+  });
+
+  it("a meter the owner never added: refused before the biller is asked", async () => {
+    const r = rig();
+    await r.join();
+    expect(await r.say(WRONG_METER)).toMatch(/That meter isn't on the list Ada set up/);
+    expect(await r.orders()).toHaveLength(0);
+    expect(r.sim.pays.size).toBe(0);
   });
 
   it("the biller fails the bill: refunded once, with a receipt", async () => {

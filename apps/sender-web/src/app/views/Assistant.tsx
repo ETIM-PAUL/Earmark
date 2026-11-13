@@ -208,7 +208,13 @@ export function Assistant({
       <section aria-labelledby="say-h" className="stack">
         <h2 id="say-h">What they can say</h2>
         <ul className="plain">
-          <li>"buy 5k light for my meter" pays the saved meter.</li>
+          <li>
+            "buy 5k light for my meter" pays the saved meter. With several, "the office meter" picks
+            one by name.
+          </li>
+          <li>
+            They can only pay for the phones, meters and decoders you added on the Family page.
+          </li>
           <li>"abeg buy 1k airtime for 0803…" works in Pidgin too.</li>
           <li>"how much is left?" shows what's left of the budget.</li>
           <li>Nothing is paid until they reply YES to the price.</li>

@@ -1,5 +1,11 @@
 import type { Lookup } from "@earmark/billers";
-import { CATEGORIES, type FamilyRules, type Order, type Quote } from "@earmark/shared";
+import {
+  CATEGORIES,
+  evaluateOrder,
+  type FamilyRules,
+  type Order,
+  type Quote,
+} from "@earmark/shared";
 import { describe, expect, it } from "vitest";
 import {
   type BotPorts,
@@ -7,6 +13,7 @@ import {
   type Family,
   isNo,
   isYes,
+  knownRefs,
   newSession,
   type Session,
   updateMessage,
@@ -19,6 +26,12 @@ import { isPlainDataBundle, type Option, pickVariation } from "./variations.js";
 const NOW = new Date("2026-11-04T10:00:00Z");
 const METER = "45031234567";
 const CARD = "1212121212";
+const PHONE_LISTED = {
+  category: "airtime" as const,
+  billerCode: "phone",
+  ref: "08021234567",
+  label: "Uncle Tunde",
+};
 
 const rules = (patch: Partial<FamilyRules> = {}): FamilyRules => ({
   familyId: "fam_abcdefgh12345678",
@@ -285,14 +298,147 @@ describe("Dialog", () => {
   });
 
   it("guesses the network from the number and shows it to confirm", async () => {
-    const h = harness({
-      "send 500 recharge to 08021234567": {
-        category: "airtime",
-        customerRef: "08021234567",
-        amountNaira: 500,
+    const h = harness(
+      {
+        "send 500 recharge to 08021234567": {
+          category: "airtime",
+          customerRef: "08021234567",
+          amountNaira: 500,
+        },
       },
-    });
+      { family: family({ saved: [...family().saved, PHONE_LISTED] }) },
+    );
     expect(await h.send("send 500 recharge to 08021234567")).toMatch(/Airtel airtime/);
+  });
+
+  describe("only numbers the owner added", () => {
+    it("refuses a phone that isn't on the list, and no order is made", async () => {
+      const h = harness({
+        "send 500 recharge to 08021234567": {
+          category: "airtime",
+          customerRef: "08021234567",
+          amountNaira: 500,
+        },
+      });
+      const out = await h.send("send 500 recharge to 08021234567");
+      expect(out).toMatch(/isn't on the list Ada set up[\s\S]*Ask Ada to add it/);
+      expect(out).not.toMatch(/Reply YES/);
+      expect(h.submitted).toHaveLength(0);
+    });
+
+    it("refuses an unlisted meter and an unlisted smartcard", async () => {
+      const h = harness({
+        "5k light for 12345678901": {
+          category: "electricity",
+          provider: "ikeja",
+          customerRef: "12345678901",
+          amountNaira: 5_000,
+        },
+        "dstv for 9999999999": { category: "tv", provider: "dstv", customerRef: "9999999999" },
+      });
+      expect(await h.send("5k light for 12345678901")).toMatch(/That meter isn't on the list/);
+      expect(await h.send("dstv for 9999999999")).toMatch(/That smartcard isn't on the list/);
+    });
+
+    it("says it in Pidgin to a Pidgin speaker", async () => {
+      const h = harness({
+        "abeg 5k light 12345678901": {
+          category: "electricity",
+          provider: "ikeja",
+          customerRef: "12345678901",
+          amountNaira: 5_000,
+          language: "pcm",
+        },
+      });
+      expect(await h.send("abeg 5k light 12345678901")).toMatch(/no dey the list wey Ada set/);
+    });
+
+    it("finds a saved number by the name the sender gave it", async () => {
+      const several = family({
+        saved: [
+          ...family().saved,
+          {
+            category: "electricity",
+            billerCode: "ikeja-electric",
+            ref: "45039999999",
+            label: "Office",
+            meterType: "prepaid",
+          },
+          {
+            category: "electricity",
+            billerCode: "ikeja-electric",
+            ref: "45038888888",
+            label: "Church",
+            meterType: "prepaid",
+          },
+          PHONE_LISTED,
+        ],
+      });
+      const h = harness(
+        {
+          "5k light for the office meter": {
+            category: "electricity",
+            customerRef: null,
+            amountNaira: 5_000,
+          },
+          "5k light please": { category: "electricity", amountNaira: 5_000 },
+          church: { category: "electricity" },
+          "1k airtime for uncle tunde": { category: "airtime", amountNaira: 1_000 },
+        },
+        { family: several },
+      );
+      expect(await h.send("5k light for the office meter")).toMatch(/Meter 45039999999/);
+      expect(await h.send("no")).toBeTruthy();
+      // No name given: it lists them, by their names.
+      expect(await h.send("5k light please")).toMatch(/Which meter\? home meter, Office or Church/);
+      expect(await h.send("church")).toMatch(/Meter 45038888888/);
+      expect(await h.send("no")).toBeTruthy();
+      expect(await h.send("1k airtime for uncle tunde")).toMatch(/Phone 08021234567/);
+    });
+
+    it("pays the recipient's own phone and a listed number written another way", async () => {
+      const h = harness(
+        {
+          "airtime 1k for me": { category: "airtime", customerRef: "SELF", amountNaira: 1_000 },
+          "1k to +2348021234567": {
+            category: "airtime",
+            customerRef: "+2348021234567",
+            amountNaira: 1_000,
+          },
+        },
+        { family: family({ saved: [...family().saved, PHONE_LISTED] }) },
+      );
+      expect(await h.send("airtime 1k for me")).toMatch(/Phone 08031234567/);
+      expect(await h.send("no")).toBeTruthy();
+      expect(await h.send("1k to +2348021234567")).toMatch(/Phone 08021234567/);
+    });
+
+    it("rejects an unlisted number at the payment check even if the sender approves", () => {
+      const v = evaluateOrder(
+        {
+          category: "airtime",
+          customerRef: "08029999999",
+          amountNgnKobo: 1_000_00,
+          quote: {
+            rateNgnPerUsd: "1325.00",
+            amountUsdcAtomic: "754717",
+            quotedAt: NOW.toISOString(),
+            expiresAt: new Date(NOW.getTime() + 600_000).toISOString(),
+          },
+        },
+        rules(),
+        {
+          month: "202611",
+          spentNgnKoboByCategory: { electricity: 0, airtime: 0, data: 0, tv: 0 },
+          spentUsdcAtomic: "0",
+        },
+        { senderApproved: true, knownCustomerRefs: knownRefs(family(), "airtime") },
+      );
+      expect(v).toMatchObject({
+        outcome: "reject",
+        breaches: [{ layer: "hard", code: "customer_not_listed" }],
+      });
+    });
   });
 
   it("picks a data bundle by size", async () => {

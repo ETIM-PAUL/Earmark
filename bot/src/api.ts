@@ -4,9 +4,10 @@ import { z } from "zod";
 import { MAX_MEMBERS, type SenderAccount, type SenderAccounts } from "./accounts.js";
 import type { Bot } from "./app.js";
 import type { DemoWiring } from "./demo.js";
+import type { SavedRef } from "./dialog.js";
 import { RateLimiter } from "./limits.js";
 import type { Passkeys } from "./passkeys.js";
-import { normalizeAccount, normalizePhone, resolveBiller } from "./providers.js";
+import { maskRef, normalizeAccount, normalizePhone, resolveBiller } from "./providers.js";
 import {
   describeRules,
   type FamilyTeam,
@@ -28,6 +29,8 @@ import {
  *   GET  /api/families/:id/state               overview, waiting approvals, recent orders
  *   POST /api/families/:id/invite              a fresh invite link
  *   POST /api/families/:id/freeze | preset | rules
+ *   POST /api/families/:id/numbers             add a phone, meter or smartcard the family may pay for
+ *   POST /api/families/:id/numbers/remove      take one off the list (any relative, at once)
  *   POST /api/families/:id/members/invite      a join code for a relative (creator only)
  *   POST /api/join                             redeem a join code
  *   POST /api/families/:id/policy              how many relatives must sign
@@ -81,6 +84,15 @@ const NewFamilyIn = z.object({
     .max(3)
     .default([]),
   preset: z.enum(PRESET_NAMES).default("essentials"),
+});
+
+const NewNumberIn = z.object({
+  kind: z.enum(["phone", "meter", "smartcard"]),
+  ref: z.string().min(1).max(20),
+  label: z.string().regex(LABEL),
+  /** The electricity or TV company, for a meter or smartcard. */
+  company: z.string().max(40).optional(),
+  meterType: z.enum(["prepaid", "postpaid"]).optional(),
 });
 
 const naira = z.number().int().min(0).max(10_000_000);
@@ -382,6 +394,55 @@ async function handle(
           }
           return change("rules", rules, describeRules(rules));
         }
+        case "numbers": {
+          const b = NewNumberIn.parse(await readJson(req));
+          let entry: SavedRef;
+          if (b.kind === "phone") {
+            const ref = normalizePhone(b.ref);
+            if (!ref)
+              return send(400, { error: "That doesn't look like a Nigerian phone number." });
+            entry = { category: "airtime", billerCode: "phone", ref, label: b.label };
+          } else {
+            const category = b.kind === "meter" ? "electricity" : "tv";
+            const billerCode = resolveBiller(category, b.company ?? "");
+            if (!billerCode) {
+              return send(400, {
+                error: `We don't know the ${b.kind === "meter" ? "electricity" : "TV"} company "${b.company ?? ""}".`,
+              });
+            }
+            const ref = normalizeAccount(category, b.ref);
+            if (!ref) {
+              return send(400, {
+                error:
+                  b.kind === "meter"
+                    ? `"${b.ref}" isn't a meter number (11 to 13 digits).`
+                    : `"${b.ref}" isn't a smartcard number (10 or 11 digits).`,
+              });
+            }
+            entry = {
+              category,
+              billerCode,
+              ref,
+              label: b.label,
+              ...(b.kind === "meter" ? { meterType: b.meterType ?? "prepaid" } : {}),
+            };
+          }
+          const fit = sender.addNumber(familyId, entry, true);
+          if (fit === "exists") return send(400, { error: "That number is already on the list." });
+          if (fit === "full")
+            return send(400, { error: "The list is full. Remove a number first." });
+          if (fit === "no_family") return send(404);
+          const what = b.kind === "phone" ? "phone" : b.kind;
+          return change("number", entry, summaries.number(b.label, what, maskRef(entry.ref)));
+        }
+        case "numbers/remove": {
+          const b = (await readJson(req)) as { id?: unknown };
+          if (typeof b.id !== "string") return send(400, { error: "id is required" });
+          // Taking a number off the list only stops money, so any relative can do it.
+          return sender.removeNumber(familyId, b.id)
+            ? send(200, { ok: true })
+            : send(404, { error: "That number isn't on the list." });
+        }
         case "policy": {
           const b = (await readJson(req)) as { required?: unknown };
           const n = b.required;
@@ -517,6 +578,9 @@ async function applyChange(
       return;
     case "policy":
       ctx.team.setRequired(familyId, payload as number);
+      return;
+    case "number":
+      sender.addNumber(familyId, payload as SavedRef);
       return;
   }
 }

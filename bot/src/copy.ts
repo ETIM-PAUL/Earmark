@@ -47,6 +47,14 @@ export const COPY = {
     "That doesn't look like a smartcard number (10 or 11 digits). Please send it again.",
     "That one no be smartcard number (10 or 11 digits). Abeg send am again.",
   ),
+  askWhich: t(
+    "Which {kind}? {names}. You can also send a number from the list {sender} set up.",
+    "Which {kind}? {names}. You fit also send number wey {sender} don add.",
+  ),
+  notOnList: t(
+    "That {kind} isn't on the list {sender} set up, so I can't pay for it. Ask {sender} to add it in Earmark, then try again.",
+    "That {kind} no dey the list wey {sender} set, so I no fit pay am. Abeg tell {sender} make e add am for Earmark, then try again.",
+  ),
   tooSmall: t(
     "The smallest amount for this is {min}.",
     "The smallest amount for this one na {min}.",

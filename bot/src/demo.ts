@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_RATE_SOURCES,
@@ -48,7 +48,7 @@ import {
   NOTHING_PAID,
   ownerProof,
 } from "./approvals.js";
-import type { BotPorts, Family } from "./dialog.js";
+import { type BotPorts, type Family, knownRefs } from "./dialog.js";
 import type { ChatModel } from "./model.js";
 import { LABELS, maskRef } from "./providers.js";
 import { isPlainDataBundle, type Option } from "./variations.js";
@@ -175,6 +175,18 @@ export interface SenderSide {
   applyPreset: (familyId: string, preset: PresetName) => boolean;
   /** Change single category rules or the approval threshold. Hard limits can't change here. */
   updateRules: (familyId: string, change: SoftRulesChange) => boolean;
+  /**
+   * Add a phone ("airtime" covers airtime and data), meter or smartcard the
+   * family may pay for. Nothing else can be bought.
+   */
+  addNumber: (
+    familyId: string,
+    entry: Family["saved"][number],
+    /** Only check whether it would fit. */
+    dryRun?: boolean,
+  ) => AddNumberResult;
+  /** Take a number off the list. Safe, so any relative can do it. */
+  removeNumber: (familyId: string, id: string) => boolean;
   senderName: (familyId: string) => string | null;
   /** The order behind an approval, to build what the sender signs. */
   pendingOrder: (orderId: string) => Promise<Order | null>;
@@ -211,10 +223,22 @@ export interface SenderOverview {
   /** The monthly budget in the signed policy, and what's gone this Lagos month. */
   budget: { monthlyUsd: string; spentUsd: string; leftUsd: string; perPaymentMaxUsd: string };
   recipientPhone: string;
-  saved: { category: string; label: string; ref: string }[];
+  saved: { id: string; category: string; label: string; ref: string }[];
   /** NGN per USD in a fresh quote, or null when no price is available. */
   rateNgnPerUsd: string | null;
 }
+
+export type AddNumberResult = "ok" | "exists" | "full" | "no_family";
+
+/** How many of each the list can hold. */
+export const NUMBER_LIMITS = { electricity: 10, tv: 5, airtime: 10 } as const;
+
+/** A stable id for one saved number, so the app can ask to remove it without the number. */
+export const numberId = (category: string, ref: string) =>
+  `n_${createHash("sha256")
+    .update(`${category}|${ref.replace(/\D/g, "")}`)
+    .digest("hex")
+    .slice(0, 12)}`;
 
 const SANDBOX = { phone: "08011111111", meter: "1111111111111", smartcard: "1212121212" };
 
@@ -495,6 +519,7 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
     await refreshUsage(family);
     const verdict = evaluateOrder({ ...order, quote }, family.rules, family.usage, {
       senderApproved: true,
+      knownCustomerRefs: knownRefs(family, order.category),
     });
     if (verdict.outcome !== "allow") {
       const why = verdict.breaches
@@ -703,7 +728,12 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
           perPaymentMaxUsd: formatUsdc(f.rules.hardLimits.perTransactionMaxUsdcAtomic),
         },
         recipientPhone: maskRef(f.recipientPhone),
-        saved: f.saved.map((r) => ({ category: r.category, label: r.label, ref: maskRef(r.ref) })),
+        saved: f.saved.map((r) => ({
+          id: numberId(r.category, r.ref),
+          category: r.category,
+          label: r.label,
+          ref: maskRef(r.ref),
+        })),
         rateNgnPerUsd: rate,
       };
     },
@@ -711,6 +741,27 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
       const f = families.get(familyId);
       if (!f) return false;
       f.rules = updateSoftRules(f.rules, change, now());
+      return true;
+    },
+    addNumber: (familyId, entry, dryRun = false) => {
+      const f = families.get(familyId);
+      if (!f) return "no_family";
+      const id = numberId(entry.category, entry.ref);
+      const onList =
+        f.saved.some((r) => numberId(r.category, r.ref) === id) ||
+        (entry.category === "airtime" && numberId("airtime", f.recipientPhone) === id);
+      if (onList) return "exists";
+      const limit = NUMBER_LIMITS[entry.category as keyof typeof NUMBER_LIMITS] ?? 0;
+      if (f.saved.filter((r) => r.category === entry.category).length >= limit) return "full";
+      if (!dryRun) f.saved.push(entry);
+      return "ok";
+    },
+    removeNumber: (familyId, id) => {
+      const f = families.get(familyId);
+      if (!f) return false;
+      const at = f.saved.findIndex((r) => numberId(r.category, r.ref) === id);
+      if (at < 0) return false;
+      f.saved.splice(at, 1);
       return true;
     },
     pendingOrder: async (orderId) => {

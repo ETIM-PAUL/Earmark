@@ -4,6 +4,7 @@ import { AuthPage } from "./Auth.js";
 import { ApprovalItem, TeamCard } from "./Dashboard.js";
 import { Onboarding } from "./Onboarding.js";
 import type { AppConfig, ApprovalCard, Team } from "./types.js";
+import { Numbers } from "./views/Numbers.js";
 
 const config: AppConfig = {
   network: "testnet",
@@ -154,5 +155,60 @@ describe("sign up and sign in", () => {
     expect(html).toContain("Sign in with your passkey");
     expect(html).not.toContain("Your name");
     expect(html).toContain('href="#/signup"');
+  });
+});
+
+describe("numbers the family can pay for", () => {
+  const overview = {
+    senderName: "Ada",
+    frozen: false,
+    rulesVersion: 1,
+    approvalAboveNaira: null,
+    categories: [],
+    budget: {
+      monthlyUsd: "100",
+      spentUsd: "$0.00",
+      leftUsd: "$100.00",
+      perPaymentMaxUsd: "$50.00",
+    },
+    recipientPhone: "0803…4567",
+    saved: [
+      { id: "n_1", category: "electricity", label: "Office", ref: "4503…9999" },
+      { id: "n_2", category: "electricity", label: "Church", ref: "4503…8888" },
+      { id: "n_3", category: "tv", label: "Parents' DStv", ref: "1212…1212" },
+      { id: "n_4", category: "airtime", label: "Uncle Tunde", ref: "0802…4567" },
+    ],
+    rateNgnPerUsd: null,
+  };
+  const html = renderToStaticMarkup(
+    <Numbers familyId="fam_x" overview={overview} onChange={() => {}} />,
+  );
+
+  it("groups phones, meters and decoders, each with a way to add and remove", () => {
+    for (const t of [
+      "Phones for airtime and data",
+      "Electricity meters",
+      "TV decoders",
+      "Add a phone",
+      "Add a meter",
+      "Add a decoder",
+    ]) {
+      expect(html).toContain(t);
+    }
+    for (const t of ["Office", "Church", "Parents&#x27; DStv", "Uncle Tunde"]) {
+      expect(html).toContain(t);
+    }
+    expect(html).toContain('aria-label="Remove Office"');
+    expect(html).toContain("The assistant only pays for what is listed here");
+  });
+
+  it("shows the recipient's phone as always included, and an empty list kindly", () => {
+    expect(html).toContain("Recipient");
+    expect(html).toContain("0803…4567");
+    const none = renderToStaticMarkup(
+      <Numbers familyId="fam_x" overview={{ ...overview, saved: [] }} onChange={() => {}} />,
+    );
+    expect(none).toContain("No meters yet.");
+    expect(none).toContain("No decoders yet.");
   });
 });

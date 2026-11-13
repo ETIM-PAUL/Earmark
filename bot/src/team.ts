@@ -25,7 +25,7 @@ const MAX_OPEN_PROPOSALS = 10;
 // No 0/O/1/I/L: a code is read aloud or typed from a message.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
-export type ProposalKind = "preset" | "rules" | "unfreeze" | "policy";
+export type ProposalKind = "preset" | "rules" | "unfreeze" | "policy" | "number";
 
 export interface Proposal {
   id: string;
@@ -82,6 +82,8 @@ export function describeRules(change: SoftRulesChange): string {
 export const summaries = {
   preset: (p: PresetName) => `Switch to the ${PRESETS[p].label} rules`,
   unfreeze: () => "Unfreeze the account",
+  number: (label: string, what: string, masked: string) =>
+    `Let the family pay for ${label} (${what} ${masked})`,
   policy: (n: number) =>
     n <= 1 ? "Let any one relative approve" : `Require ${n} relatives to approve`,
 };

@@ -38,6 +38,7 @@ export interface RuleBreach {
     | "monthly_budget"
     | "category_disabled"
     | "category_monthly_cap"
+    | "customer_not_listed"
     | "customer_not_allowed"
     | "approval_above_amount";
   /** Plain words, safe for the sender's approval card and the recipient. */
@@ -61,12 +62,16 @@ const LABEL: Record<Category, string> = {
  * breaches need the sender's approval unless `senderApproved` is set.
  * The AI never calls this with senderApproved: only the owner's signed
  * approval vote does.
+ *
+ * `knownCustomerRefs` is the list of phones, meters and smartcards the owner
+ * added for this category. When it is given, a bill for anything else is a
+ * hard breach: no approval can pay a number the owner never added.
  */
 export function evaluateOrder(
   order: Pick<Order, "category" | "customerRef" | "amountNgnKobo" | "quote">,
   rules: FamilyRules,
   usage: MonthUsage,
-  opts: { senderApproved?: boolean } = {},
+  opts: { senderApproved?: boolean; knownCustomerRefs?: readonly string[] } = {},
 ): Evaluation {
   if (!order.quote) throw new Error("evaluateOrder needs a quoted order");
   const hard: RuleBreach[] = [];
@@ -94,6 +99,18 @@ export function evaluateOrder(
       code: "monthly_budget",
       message: `Only ${formatUsdc(String(left))} of the $${rules.hardLimits.monthlyBudgetUsd} monthly budget is left.`,
     });
+  }
+
+  if (opts.knownCustomerRefs) {
+    const ref = normalizeCustomerRef(order.category, order.customerRef);
+    const known = opts.knownCustomerRefs.map((r) => normalizeCustomerRef(order.category, r));
+    if (!known.includes(ref)) {
+      hard.push({
+        layer: "hard",
+        code: "customer_not_listed",
+        message: `This ${order.category === "electricity" ? "meter" : order.category === "tv" ? "smartcard" : "phone number"} was not added by the account owner.`,
+      });
+    }
   }
 
   const rule = rules.categories[order.category];

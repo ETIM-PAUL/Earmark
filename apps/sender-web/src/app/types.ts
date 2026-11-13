@@ -45,7 +45,7 @@ export interface Overview {
   categories: CategoryRuleView[];
   budget: { monthlyUsd: string; spentUsd: string; leftUsd: string; perPaymentMaxUsd: string };
   recipientPhone: string;
-  saved: { category: string; label: string; ref: string }[];
+  saved: { id: string; category: string; label: string; ref: string }[];
   rateNgnPerUsd: string | null;
 }
 
