@@ -43,7 +43,7 @@ Keys (use null when the latest message doesn't say it):
 - language: "pcm" if the message uses Pidgin (abeg, wetin, dey, una, na, oya, wan, make, am, sef, abi, sha, comot), else "en".
 - category: "electricity" (light, NEPA, PHCN, meter, token, prepaid/postpaid), "airtime" (recharge, card, credit, top-up, call credit), "data" (data, MB, GB, browse, bundle), "tv" (DStv, GOtv, StarTimes, Showmax, cable, decoder, subscription).
 - provider: the company exactly as written, e.g. "ikeja", "ikedc", "eko", "aedc", "mtn", "airtel", "glo", "9mobile", "dstv", "gotv". For airtime or data on a network, put the network.
-- customerRef: the meter, phone or smartcard number as digits only. "SELF" if they mean their own line or their usual meter/decoder without giving a number ("my line", "my meter", "for me", "my number").
+- customerRef: the meter, phone or smartcard number as digits only. "SELF" if they mean their own line or their usual meter/decoder without giving digits — not just "my line"/"my meter"/"for me"/"my number", but any way of pointing at the one already on the account: "the number [sender] added", "the one the owner set", "the number the family set", "the usual one", "my own", "the number on my account". There is only one phone per family, so default to SELF whenever a phone is needed and no digits were given, unless they're clearly naming someone else's number instead.
 - amountNaira: naira as a number. "10k" = 10000, "2.5k" = 2500, "5 thousand" = 5000, "N1,500" = 1500, "one k" = 1000. Not for bundle sizes like 1.5GB.
 - bundle: data bundle or TV bouquet words, e.g. "1.5GB", "10GB monthly", "compact", "padi", "jolli". Null for airtime and electricity.
 - meterType: "prepaid" or "postpaid" only if said.
