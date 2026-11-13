@@ -12,8 +12,8 @@
 
 The landing page, and the judge view after a real `make demo` run — "abeg buy 5k light for my meter", then "yes" — showing all three panes at once: the sender's rules, the recipient's chat in Pidgin, and the on-chain receipt.
 
-| Landing page | Judge view (desktop) |
-| --- | --- |
+| Landing page                                            | Judge view (desktop)                                                                                        |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | ![Earmark landing page](assets/screenshots/landing.png) | ![Judge view: sender app, recipient chat and chain receipt side by side](assets/screenshots/judge-view.png) |
 
 Judge view on a phone (tabs instead of three columns)
@@ -41,7 +41,7 @@ make demo
 | Enter a phone number, keep the demo meter, pick **Essentials**, **Create family**                                                         | Home: your budget in dollars next to naira, and a card with the recipient's invite and **Open the demo chat**                                                  |
 | In the demo chat, ask for `buy 25k light for my meter`, then **yes**. Back in the app, open **Approvals**                                 | A card with the amount, the rule that tripped and **Approve** / **Decline**. Approving asks for your fingerprint again, and only that signature runs the order |
 | **Rules** tab: switch TV on, change a cap, or pick another preset                                                                         | Saved at once; the next request follows the new rules                                                                                                          |
-| **Family** tab: add a second phone number, then ask the recipient to buy airtime for a *different* number you didn't add                 | Bought for the number you added; refused for the one you didn't — "That phone isn't on the list Ada set up, so I can't pay for it"                             |
+| **Family** tab: add a second phone number, then ask the recipient to buy airtime for a _different_ number you didn't add                  | Bought for the number you added; refused for the one you didn't — "That phone isn't on the list Ada set up, so I can't pay for it"                             |
 | **Top up** tab                                                                                                                            | Says plainly that it isn't available in this build. No balance is invented                                                                                     |
 | Type `buy 25k light for my meter`, then **yes** (in the judge page's sender pane)                                                         | The bot says it needs Ada's OK first. The sender pane shows a card with the amount, the rule that tripped and **Approve** / **Decline**; nothing is bought yet |
 | Click **Approve**                                                                                                                         | The recipient hears "Ada said yes", then the token and receipt. **Decline** instead: "Ada declined this payment. Nothing was paid."                            |
@@ -52,16 +52,16 @@ make demo
 
 ## What is real and what is not
 
-| Part                                                                                                 | `make demo`                                                                                                                                                 | With keys (`pnpm start:bot`)                                         |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Order rules, quotes, confirmation, executor, refunds logic, receipts, Pidgin, rate limit, monitoring | Real code                                                                                                                                                   | Real code                                                            |
-| VTpass bill purchase                                                                                 | Simulated, one bill per request, instant                                                                                                                    | **Real VTpass sandbox** purchases and lookups                        |
-| Receipts contract                                                                                    | A local stand-in that answers the same RPC calls the page makes                                                                                             | **Real contract on NEAR testnet**, written by the service account    |
-| Understanding messages                                                                               | Plain rules; far less flexible than the model                                                                                                               | **NEAR AI Cloud** model (`deepseek/deepseek-v4.1-flash`)             |
-| Naira rate                                                                                           | Fixed ₦1,346 per $                                                                                                                                          | Live Coinbase and open.er-api, lower of the two, minus a 1.5% spread |
-| Chat                                                                                                 | A web chat in the judge page                                                                                                                                | Telegram (live) and WhatsApp through the Twilio sandbox              |
-| Family paying settlement, refunds                                                                    | Simulated                                                                                                                                                   | Simulated (Phase 8 needs mainnet accounts and is not built)          |
-| Sender approval card and decision                                                                    | Signed by the sender's **passkey** in the app (the judge page's demo owner signs for its own pane)                                                          | Same; the real sender signs with their passkey                       |
+| Part                                                                                                 | `make demo`                                                                                                                                                                                                       | With keys (`pnpm start:bot`)                                         |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Order rules, quotes, confirmation, executor, refunds logic, receipts, Pidgin, rate limit, monitoring | Real code                                                                                                                                                                                                         | Real code                                                            |
+| VTpass bill purchase                                                                                 | Simulated, one bill per request, instant                                                                                                                                                                          | **Real VTpass sandbox** purchases and lookups                        |
+| Receipts contract                                                                                    | A local stand-in that answers the same RPC calls the page makes                                                                                                                                                   | **Real contract on NEAR testnet**, written by the service account    |
+| Understanding messages                                                                               | Plain rules; far less flexible than the model                                                                                                                                                                     | **NEAR AI Cloud** model (`deepseek/deepseek-v4.1-flash`)             |
+| Naira rate                                                                                           | Fixed ₦1,346 per $                                                                                                                                                                                                | Live Coinbase and open.er-api, lower of the two, minus a 1.5% spread |
+| Chat                                                                                                 | A web chat in the judge page                                                                                                                                                                                      | Telegram (live) and WhatsApp through the Twilio sandbox              |
+| Family paying settlement, refunds                                                                    | Simulated                                                                                                                                                                                                         | Simulated (Phase 8 needs mainnet accounts and is not built)          |
+| Sender approval card and decision                                                                    | Signed by the sender's **passkey** in the app (the judge page's demo owner signs for its own pane)                                                                                                                | Same; the real sender signs with their passkey                       |
 | Sender web app                                                                                       | **Real:** passkey sign-in, family setup, rule editing, approvals, freeze, activity, the list of phones/meters/decoders the sender allows, several relatives per family with co-signing. **Not available:** top-up | Same                                                                 |
 
 No mainnet transaction exists yet. The receipts contract is live on testnet at [`earmark-receipts-9e9730f1.testnet`](https://testnet.nearblocks.io/address/earmark-receipts-9e9730f1.testnet) with real receipts from VTpass sandbox purchases; the page verifies each one against the archival RPC. Mainnet deployment waits on the mainnet accounts in `.env.example`.
@@ -88,17 +88,17 @@ No mainnet transaction exists yet. The receipts contract is live on testnet at [
 
 ## Repository layout
 
-| Path                 | What it is                                                                                |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| `packages/config`    | Validated environment config per provider; errors never echo secret values                |
-| `packages/agent-api` | NEAR Intents Agent API integration: family policy, owner signing, flows, refusal messages |
-| `packages/shared`    | Order, rule and receipt objects every part of the system agrees on                        |
-| `contracts/receipts` | NEAR contract holding on-chain receipts, with no personal data                            |
-| `services/orders`    | Order service: rule checks, the order lifecycle, refunds and reconciliation               |
-| `services/billers`   | Biller service: VTpass purchases, naira quotes and the float guard                        |
-| `bot`                | Telegram and WhatsApp assistant on NEAR AI Cloud                                          |
+| Path                 | What it is                                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/config`    | Validated environment config per provider; errors never echo secret values                                                                                       |
+| `packages/agent-api` | NEAR Intents Agent API integration: family policy, owner signing, flows, refusal messages                                                                        |
+| `packages/shared`    | Order, rule and receipt objects every part of the system agrees on, the rule checks and the order lifecycle                                                      |
+| `contracts/receipts` | NEAR contract holding on-chain receipts, with no personal data                                                                                                   |
+| `services/orders`    | Placeholder service that only answers `/health`; the money flow (Phase 8) will live here                                                                         |
+| `services/billers`   | Biller service: VTpass purchases, naira quotes, the float guard, and the order executor with refunds                                                             |
+| `bot`                | Telegram and WhatsApp assistant on NEAR AI Cloud                                                                                                                 |
 | `apps/sender-web`    | Sender web app: passkey sign-in, rules, the phone/meter/decoder allowlist, family co-signing, approvals, receipts feed and top-ups (not available in this build) |
-| `scripts`            | Operational scripts, including the account and key smoke check                            |
+| `scripts`            | Operational scripts, including the account and key smoke check                                                                                                   |
 
 ## Developer commands
 
