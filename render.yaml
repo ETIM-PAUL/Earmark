@@ -1,0 +1,109 @@
+services:
+  # The assistant: Telegram, WhatsApp, the sender API and the in-memory
+  # demo wiring. The only service the sender-web app and the chat actually
+  # depend on; everything else here is included for completeness.
+  - type: web
+    name: earmark-bot
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build:ts
+    startCommand: pnpm --filter @earmark/bot start
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_PORT
+        value: 10000 # matches Render's default expected port
+      - key: WEB_APP_URL
+        value: https://earmark-web.onrender.com
+      # Set these in the Render dashboard; never committed. See .env.example.
+      - key: NEAR_AI_API_KEY
+        sync: false
+      - key: NEAR_AI_BASE_URL
+        sync: false
+      - key: NEAR_AI_MODEL
+        sync: false
+      - key: VTPASS_BASE_URL
+        sync: false
+      - key: VTPASS_API_KEY
+        sync: false
+      - key: VTPASS_PUBLIC_KEY
+        sync: false
+      - key: VTPASS_SECRET_KEY
+        sync: false
+      - key: QUOTE_SPREAD_BPS
+        sync: false
+      - key: VTPASS_FLOAT_FLOOR_NGN
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+      - key: BOT_PUBLIC_URL
+        sync: false # set to this service's own onrender.com URL once known
+      - key: ALERTS_TELEGRAM_CHAT_ID
+        sync: false
+
+  # Biller service: health, naira quotes, the float guard and the VTpass
+  # webhook. Not called by `bot` today (it imports @earmark/billers as a
+  # library instead) — standing up on its own for parity and for a
+  # VTpass webhook target if you want one later.
+  - type: web
+    name: earmark-billers
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build:ts
+    startCommand: pnpm --filter @earmark/billers start
+    healthCheckPath: /health
+    envVars:
+      - key: BILLERS_PORT
+        value: 10000
+      - key: VTPASS_BASE_URL
+        sync: false
+      - key: VTPASS_API_KEY
+        sync: false
+      - key: VTPASS_PUBLIC_KEY
+        sync: false
+      - key: VTPASS_SECRET_KEY
+        sync: false
+      - key: QUOTE_SPREAD_BPS
+        sync: false
+      - key: VTPASS_FLOAT_FLOOR_NGN
+        sync: false
+
+  # Order service: currently a /health skeleton only (Phases 8 and 11 fill
+  # it in). Included so every workspace package has a live counterpart.
+  - type: web
+    name: earmark-orders
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build:ts
+    startCommand: pnpm --filter @earmark/orders start
+    healthCheckPath: /health
+    envVars:
+      - key: ORDERS_PORT
+        value: 10000
+
+  # Sender web app: landing, the app (rules, approvals, top-ups), the
+  # public receipt page and the judge view. Static; built with Vite.
+  - type: web
+    name: earmark-web
+    runtime: static
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @earmark/shared build && pnpm --filter @earmark/sender-web build
+    staticPublishPath: ./apps/sender-web/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://earmark-bot.onrender.com
+      - key: VITE_NEAR_NETWORK
+        value: testnet
+      - key: VITE_RECEIPTS_CONTRACT_ID
+        sync: false # e.g. earmark-receipts-9e9730f1.testnet, from .earmark/receipts-testnet.json
