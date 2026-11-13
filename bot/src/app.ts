@@ -159,7 +159,14 @@ export function createBot(opts: BotOptions) {
             `${say(session.lang, "connected", { sender })}\n\n${say(session.lang, "help", { sender })}`,
           ];
         } else {
-          replies = [say(session.lang, "inviteBad")];
+          const key = r.ok
+            ? "inviteUnknown" // redeemed, but demo.connect failed: no family behind this code
+            : r.reason === "expired"
+              ? "inviteExpired"
+              : r.reason === "used"
+                ? "inviteUsed"
+                : "inviteUnknown";
+          replies = [say(session.lang, key)];
         }
       } else if (text === null) {
         replies = [say(session.lang, "textOnly")];

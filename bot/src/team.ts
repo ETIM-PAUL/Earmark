@@ -19,7 +19,7 @@ import type { SenderAccounts } from "./accounts.js";
  * In memory, like the accounts.
  */
 
-export const JOIN_CODE_TTL_MS = 48 * 60 * 60 * 1000;
+export const JOIN_CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const PROPOSAL_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_OPEN_PROPOSALS = 10;
 // No 0/O/1/I/L: a code is read aloud or typed from a message.

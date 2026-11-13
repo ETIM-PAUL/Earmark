@@ -118,9 +118,17 @@ export const COPY = {
     "Welcome! This chat is now connected to {sender}'s family account.",
     "You don land! This chat don connect to {sender} family account.",
   ),
-  inviteBad: t(
-    "That invite link doesn't work any more. Ask the person who sends you money for a new one.",
-    "That invite link no dey work again. Ask the person wey dey send you money make e send new one.",
+  inviteUnknown: t(
+    "That invite link doesn't look right — it may be cut off. Check you copied the whole link, or ask the person who sends you money to send it again.",
+    "That invite link no correct — e fit cut short. Check say you copy the whole link, or ask the person wey dey send you money make e send am again.",
+  ),
+  inviteExpired: t(
+    "That invite link has expired. Ask the person who sends you money to send you a new one.",
+    "That invite link don expire. Ask the person wey dey send you money make e send you new one.",
+  ),
+  inviteUsed: t(
+    "That invite link was already used to connect a different chat. If that's you on another device, use this chat instead; otherwise ask the person who sends you money for a new link.",
+    "That invite link don already connect another chat. If na you for another phone, use this chat instead; if not, ask the person wey dey send you money for new link.",
   ),
   notConnected: t(
     "This chat isn't connected to a family account yet. Ask the person who sends you money for your invite link.",
