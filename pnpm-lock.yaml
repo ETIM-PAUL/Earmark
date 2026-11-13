@@ -209,6 +209,9 @@ importers:
 
   bot:
     dependencies:
+      '@earmark/agent-api':
+        specifier: workspace:*
+        version: link:../packages/agent-api
       '@earmark/billers':
         specifier: workspace:*
         version: link:../services/billers
@@ -218,6 +221,9 @@ importers:
       '@earmark/shared':
         specifier: workspace:*
         version: link:../packages/shared
+      '@near-intents-agent-api/sdk':
+        specifier: 0.7.3
+        version: 0.7.3
       '@simplewebauthn/server':
         specifier: 14.0.3
         version: 14.0.3

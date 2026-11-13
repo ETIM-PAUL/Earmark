@@ -1,10 +1,26 @@
 # Earmark
 
-**What it is.** Send money home with rules. Someone abroad funds a family account from any chain and signs spending rules once. The recipient then asks an AI assistant, in English or Pidgin, to pay household bills inside those rules: prepaid electricity, airtime, data and TV. Every payment gets a public receipt on NEAR with no personal data.
+**What it is.** Send money home with rules. Someone abroad funds a family account from any chain and signs spending rules once. A family member then asks an AI assistant, in English or Pidgin, to pay household bills inside those rules: prepaid electricity, airtime, data and TV. Every payment gets a public receipt on NEAR with no personal data.
 
 **The problem.** Nigerians abroad sent home $21.8B in 2025, and senders can't control how it gets spent. Cash sent home can't be limited to bills, and a bill paid by the sender needs the sender awake, online and on the phone. Earmark lets the sender set the rules once and lets the recipient do the asking.
 
-**Status.** Built for the NEAR hackathon (tracks `realworld` and `agents`). The recipient side works end to end (chat → rules → biller → receipt → public page). The money side (funding, the family account paying settlement, refunds on-chain) and the sender web app are not built yet: see [What is real and what is not](#what-is-real-and-what-is-not).
+**Status.** Built for the NEAR hackathon (tracks `realworld` and `agents`). The recipient side works end to end (chat → rules → biller → receipt → public page), and the sender web app is real: passkey sign-in, rules, approvals, freeze, a list of phones/meters/decoders the sender approved, and several relatives co-signing on one family. What's not built yet is the money side — funding the family account and paying our settlement account in USDC, and refunds on-chain (both are simulated today): see [What is real and what is not](#what-is-real-and-what-is-not).
+
+**Eligibility (Q-007/Q-010 of [HACKATHON.md](HACKATHON.md)).** NEAR Intents has no testnet, so the Agent API pieces are spiked against mainnet with tiny dry-run amounts; everything else — the receipts contract, every order, every payment in this build — runs on testnet or a sandbox, and stays there through judging.
+
+## Screenshots
+
+The landing page, and the judge view after a real `make demo` run — "abeg buy 5k light for my meter", then "yes" — showing all three panes at once: the sender's rules, the recipient's chat in Pidgin, and the on-chain receipt.
+
+| Landing page | Judge view (desktop) |
+| --- | --- |
+| ![Earmark landing page](assets/screenshots/landing.png) | ![Judge view: sender app, recipient chat and chain receipt side by side](assets/screenshots/judge-view.png) |
+
+Judge view on a phone (tabs instead of three columns)
+
+![Judge view at phone width, showing the sender-app tab with tabs for recipient chat and chain below the title](assets/screenshots/judge-view-mobile.png)
+
+
 
 ## Try it in 10 minutes, no keys, no money
 
@@ -25,6 +41,7 @@ make demo
 | Enter a phone number, keep the demo meter, pick **Essentials**, **Create family**                                                         | Home: your budget in dollars next to naira, and a card with the recipient's invite and **Open the demo chat**                                                  |
 | In the demo chat, ask for `buy 25k light for my meter`, then **yes**. Back in the app, open **Approvals**                                 | A card with the amount, the rule that tripped and **Approve** / **Decline**. Approving asks for your fingerprint again, and only that signature runs the order |
 | **Rules** tab: switch TV on, change a cap, or pick another preset                                                                         | Saved at once; the next request follows the new rules                                                                                                          |
+| **Family** tab: add a second phone number, then ask the recipient to buy airtime for a *different* number you didn't add                 | Bought for the number you added; refused for the one you didn't — "That phone isn't on the list Ada set up, so I can't pay for it"                             |
 | **Top up** tab                                                                                                                            | Says plainly that it isn't available in this build. No balance is invented                                                                                     |
 | Type `buy 25k light for my meter`, then **yes** (in the judge page's sender pane)                                                         | The bot says it needs Ada's OK first. The sender pane shows a card with the amount, the rule that tripped and **Approve** / **Decline**; nothing is bought yet |
 | Click **Approve**                                                                                                                         | The recipient hears "Ada said yes", then the token and receipt. **Decline** instead: "Ada declined this payment. Nothing was paid."                            |
@@ -45,7 +62,7 @@ make demo
 | Chat                                                                                                 | A web chat in the judge page                                                                                                                                | Telegram (live) and WhatsApp through the Twilio sandbox              |
 | Family paying settlement, refunds                                                                    | Simulated                                                                                                                                                   | Simulated (Phase 8 needs mainnet accounts and is not built)          |
 | Sender approval card and decision                                                                    | Signed by the sender's **passkey** in the app (the judge page's demo owner signs for its own pane)                                                          | Same; the real sender signs with their passkey                       |
-| Sender web app                                                                                       | **Real:** passkey sign-in, family setup, rule editing, approvals, freeze, activity, several relatives per family with co-signing. **Not available:** top-up | Same                                                                 |
+| Sender web app                                                                                       | **Real:** passkey sign-in, family setup, rule editing, approvals, freeze, activity, the list of phones/meters/decoders the sender allows, several relatives per family with co-signing. **Not available:** top-up | Same                                                                 |
 
 No mainnet transaction exists yet. The receipts contract is live on testnet at [`earmark-receipts-9e9730f1.testnet`](https://testnet.nearblocks.io/address/earmark-receipts-9e9730f1.testnet) with real receipts from VTpass sandbox purchases; the page verifies each one against the archival RPC. Mainnet deployment waits on the mainnet accounts in `.env.example`.
 
@@ -64,6 +81,7 @@ No mainnet transaction exists yet. The receipts contract is live on testnet at [
 
 - The model only extracts fields. Only a message that is plainly "yes" confirms, matched by a regex, and only while a summary is showing.
 - Rules are checked in code after YES. A hard limit or a frozen account refuses; a category rule sends a card to the sender, who must approve or decline. Only a decision signed by a sender's passkey for that order counts (a family can ask for two or more relatives to sign), a stale price is re-quoted, and an unanswered request is cancelled after 24 hours.
+- The recipient can only ask for a bill on a phone, meter or decoder the sender added in the app. Any other number is refused before a quote is even made, so a mistyped or unfamiliar number never becomes a payment.
 - A 10-minute-old price is never paid. The float guard stops new orders when the VTpass balance is low.
 - One order ID is never bought twice: state is saved before VTpass is called, and then the order is only requeried.
 - Failure drills (VTpass down, float empty, wrong meter, double YES, Agent API error, RPC down…) each end in a clear message plus a refund or a retry.
@@ -79,7 +97,7 @@ No mainnet transaction exists yet. The receipts contract is live on testnet at [
 | `services/orders`    | Order service: rule checks, the order lifecycle, refunds and reconciliation               |
 | `services/billers`   | Biller service: VTpass purchases, naira quotes and the float guard                        |
 | `bot`                | Telegram and WhatsApp assistant on NEAR AI Cloud                                          |
-| `apps/sender-web`    | Sender web app: rules, top-ups, receipts feed and approvals                               |
+| `apps/sender-web`    | Sender web app: passkey sign-in, rules, the phone/meter/decoder allowlist, family co-signing, approvals, receipts feed and top-ups (not available in this build) |
 | `scripts`            | Operational scripts, including the account and key smoke check                            |
 
 ## Developer commands
@@ -151,11 +169,15 @@ For WhatsApp, run a tunnel to `BOT_PORT`, set `BOT_PUBLIC_URL` to it, and set `<
 
 Names, phone numbers, meter numbers and tokens never go on-chain. Each receipt carries an HMAC-SHA256 of the customer reference, keyed by a per-family secret that stays in our database. The judge view masks long numbers in the chat.
 
+## Tracks
+
+`realworld` and `agents`, per the ids in [HACKATHON.md](HACKATHON.md). Earmark is a stablecoin remittance rail a family could use tomorrow (`realworld`: STABLECOINS, NEAR INTENTS), fronted by an agent the recipient talks to in plain English or Pidgin that never holds a key of its own — every spend is checked against sender-signed rules in code, and large or unlisted spends need a passkey-signed approval (`agents`: AGENT COMMERCE). We did not claim `social`: that track's hint is to build on top of Sputnik DAO and Trezu rather than roll your own multisig, and the family co-signing here is exactly a rolled-your-own multisig, built before that hint existed as a track fit. Naming it instead of claiming it felt more honest than stretching the fit.
+
 ## Baseline and disclosure
 
 - **No code from before the hackathon.** Open-source libraries in use: zod, React, Vite, near-sdk-rs, near-workspaces, vitest, Biome, `@near-intents-agent-api/sdk` and near-api-js. The Agent API flows follow the patterns in the NEAR-Intents-Agent-API SDK README and examples repository.
 - **Our role.** Earmark is the naira settlement partner: families pay USDC to our settlement account, and we pay the bill from our VTpass wallet in naira. The VTpass float is ours, topped up in naira.
-- **Mocked in `make demo`:** VTpass, the chain, the model and the naira rate (table above). The simulated VTpass delivers every bill; the real one can refuse, delay or reverse, which the drills cover.
+- **Mocked in** `make demo`**:** VTpass, the chain, the model and the naira rate (table above). The simulated VTpass delivers every bill; the real one can refuse, delay or reverse, which the drills cover.
 - **Not built yet:** the money flow (Phase 8), funding and top-ups (the funding half of Phase 12, which needs the mainnet accounts), and sign-in with a NEAR or EVM wallet, the OutLayer attested-purchase stretch (Phase 14), and the hosted demo. The real-family pilot has not run, so there are no pilot numbers here.
 - **Other projects:** none is named yet; if anyone on the team also works on another hackathon project, it will be listed here.
 

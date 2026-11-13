@@ -80,10 +80,22 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
     tickMs: 5_000,
   });
 
+  // Vite answers on both "localhost" and "127.0.0.1"; a browser on whichever
+  // one was actually typed must still pass the Access-Control-Allow-Origin
+  // check, or every fetch to this server fails as "couldn't be reached".
+  const webUrlPort = new URL(webUrl).port;
+  const allowedOrigins = new Set([
+    webUrl,
+    `http://localhost:${webUrlPort}`,
+    `http://127.0.0.1:${webUrlPort}`,
+  ]);
+
   const botServer: Server = createServer((req, res) => {
+    const origin = req.headers.origin;
     const cors = {
-      "access-control-allow-origin": webUrl,
+      "access-control-allow-origin": origin && allowedOrigins.has(origin) ? origin : webUrl,
       "access-control-allow-headers": "content-type",
+      vary: "Origin",
     };
     const local = LOOPBACK.has(req.socket.remoteAddress ?? "");
     if (senderRoute(req, res, { demo, webUrl })) return;

@@ -19,6 +19,7 @@
     "format": "biome format --write .",
     "check:accounts": "pnpm --filter @earmark/scripts check:accounts",
     "spike:agent-api": "pnpm --filter @earmark/scripts spike:agent-api",
+    "setup:agent-production": "pnpm --filter @earmark/scripts setup:agent-production",
     "spike:vtpass": "pnpm --filter @earmark/scripts spike:vtpass",
     "deploy:receipts:testnet": "pnpm --filter @earmark/scripts deploy:receipts:testnet",
     "drill:billers": "pnpm --filter @earmark/scripts drill:billers",

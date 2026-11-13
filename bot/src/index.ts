@@ -1,15 +1,20 @@
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
 import {
+  agentApiEnv,
   billersEnv,
   isConfigured,
   nearAiEnv,
+  nearEnv,
   readEnv,
   telegramEnv,
   twilioEnv,
   vtpassEnv,
 } from "@earmark/config";
+import { createAgentApi } from "@near-intents-agent-api/sdk";
 import { SenderAccounts } from "./accounts.js";
+import { createAgentApiPayer } from "./agent-payer.js";
 import { apiRoute } from "./api.js";
 import { type Bot, createBot } from "./app.js";
 import { Telegram, WhatsApp } from "./channels.js";
@@ -63,6 +68,9 @@ async function send(chat: string, text: string): Promise<void> {
   const [kind, id = ""] = chat.split(/:(.*)/s);
   if (kind === "tg" && telegram) return telegram.send(id, text);
   if (kind === "wa" && whatsapp) return whatsapp.send(id, text);
+  // The deployed judge page's "type as the recipient" box: shown through
+  // the transcript GET endpoint, not sent anywhere.
+  if (kind === "web") return;
   throw new Error(`no channel for ${kind}`);
 }
 
@@ -93,6 +101,30 @@ const passkeys = new Passkeys({
   origin: new URL(webUrl).origin,
   accounts,
 });
+// Real settlement through the Agent API, from `pnpm setup:agent-production`.
+// Off by default: every other run stays on the simulated payer, as before.
+async function realPayer() {
+  if (process.env.AGENT_API_REAL_PAYMENTS !== "true") return {};
+  const state = JSON.parse(
+    await readFile(resolve(ROOT, ".earmark/agent-production.json"), "utf8"),
+  ) as { agentId: string; grantToken: string; usdcAssetId: string };
+  const agentApi = createAgentApi({
+    apiKey: readEnv(agentApiEnv).NEAR_INTENTS_AGENT_API_KEY,
+    baseUrl: readEnv(agentApiEnv).NEAR_INTENTS_AGENT_API_URL,
+  });
+  const settlementAccountId = readEnv(nearEnv).SETTLEMENT_ACCOUNT_ID;
+  return {
+    payer: createAgentApiPayer({
+      api: agentApi,
+      agentId: state.agentId,
+      grantToken: state.grantToken,
+      usdcAssetId: state.usdcAssetId,
+      settlementAccountId,
+    }),
+    settlementAccountId,
+  };
+}
+
 const demo = await demoPorts({
   verifyOwner: (o, d, p) => passkeys.verifyDecision(o, d, p),
   vtpass: {
@@ -109,6 +141,7 @@ const demo = await demoPorts({
   onOrderUpdate: (o) => bot?.onOrderUpdate(o),
   onOrderWaiting: (o) => bot?.onOrderWaiting(o),
   alert: (m) => monitor.alert(m),
+  ...(await realPayer()),
 });
 
 const botName = telegram ? await telegram.start() : null;
@@ -144,6 +177,15 @@ const server = createServer((req, res) => {
       team,
       webUrl,
       config: { network: "testnet", contractId: demo.contractId, rpcUrl: null },
+      // A new family has no Telegram or WhatsApp of its own yet; connect its
+      // web chat (the deployed judge page's "type as the recipient" box) so
+      // it works right away, same as local demo mode.
+      afterFamilyCreated: async (familyId) => {
+        const code = app?.inviteFor(familyId).code;
+        await app
+          ?.onMessage(`web:${familyId}`, `/start ${code}`)
+          .catch((e) => console.error(`web chat connect failed: ${String(e)}`));
+      },
     })
   )
     return;
@@ -217,6 +259,42 @@ const server = createServer((req, res) => {
       .catch(() => res.writeHead(500).end());
     return;
   }
+  if (req.method === "OPTIONS" && req.url === "/demo/say") {
+    res.writeHead(204, {
+      "access-control-allow-origin": webUrl,
+      "access-control-allow-headers": "content-type",
+    });
+    res.end();
+    return;
+  }
+  // The recipient's side of the chat, for the deployed judge page: it has
+  // no Telegram or WhatsApp of its own, so typing there posts here.
+  if (req.method === "POST" && req.url === "/demo/say") {
+    let body = "";
+    req.on("data", (c: Buffer) => {
+      body += c.toString("utf8").slice(0, 2_000);
+    });
+    req.on("end", () => {
+      const cors = { "access-control-allow-origin": webUrl };
+      const { family, text } = (() => {
+        try {
+          return JSON.parse(body) as { family?: unknown; text?: unknown };
+        } catch {
+          return {};
+        }
+      })();
+      if (
+        typeof family !== "string" ||
+        !/^fam_[a-z0-9]{16}$/.test(family) ||
+        typeof text !== "string"
+      ) {
+        return void res.writeHead(400, cors).end();
+      }
+      app.onMessage(`web:${family}`, text).catch((e) => console.error(`demo chat: ${String(e)}`));
+      res.writeHead(202, cors).end();
+    });
+    return;
+  }
 
   if (req.method === "POST" && req.url === "/webhooks/whatsapp") {
     const chunks: Buffer[] = [];
@@ -273,6 +351,9 @@ if (telegram) {
 }
 
 const first = app.newInvite();
+await app
+  .onMessage(`web:${first.familyId}`, `/start ${first.code}`)
+  .catch((e) => console.error(`web chat connect failed: ${String(e)}`));
 console.log("Demo family ready. Open the invite link on your phone:");
 if (first.telegram) console.log(`  Telegram: ${first.telegram}`);
 if (first.whatsapp) console.log(`  WhatsApp: ${first.whatsapp}`);

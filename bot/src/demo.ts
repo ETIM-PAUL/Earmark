@@ -82,6 +82,9 @@ export interface DemoConfig {
   onOrderWaiting?: (order: Order) => void;
   alert?: (msg: string) => void;
   verifyOwner?: DemoDeps["verifyOwner"];
+  /** Real settlement, through the Agent API, from `pnpm setup:agent-production`. */
+  payer?: Payer;
+  settlementAccountId?: string;
 }
 
 /**
@@ -118,6 +121,8 @@ export interface DemoDeps {
   alert?: (msg: string) => void;
   /** Default: a simulated transfer that always lands. */
   payer?: Payer;
+  /** Where a family's payer sends USDC. Default: a demo placeholder, never a real account. */
+  settlementAccountId?: string;
   /** Default: a simulated refund that always lands. */
   refunds?: Refunds;
   /** Reuse a float reading this long. Default 30 s. */
@@ -248,13 +253,13 @@ const rule = (): FamilyRules["categories"]["airtime"] => ({
   allowedCustomerRefs: [],
 });
 
-function demoRules(familyId: string, at: Date): FamilyRules {
+function demoRules(familyId: string, at: Date, settlementAccountId: string): FamilyRules {
   return {
     familyId,
     version: 1,
     frozen: false,
     hardLimits: {
-      settlementAccountId: "earmark-settle.near",
+      settlementAccountId,
       monthlyBudgetUsd: "100",
       perTransactionMaxUsdcAtomic: "50000000",
     },
@@ -303,6 +308,8 @@ export async function demoPorts(cfg: DemoConfig): Promise<DemoWiring> {
     ...(cfg.onOrderWaiting ? { onOrderWaiting: cfg.onOrderWaiting } : {}),
     ...(cfg.alert ? { alert: cfg.alert } : {}),
     ...(cfg.verifyOwner ? { verifyOwner: cfg.verifyOwner } : {}),
+    ...(cfg.payer ? { payer: cfg.payer } : {}),
+    ...(cfg.settlementAccountId ? { settlementAccountId: cfg.settlementAccountId } : {}),
   });
 }
 
@@ -319,6 +326,7 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
     ...(deps.floatCacheMs !== undefined ? { cacheMs: deps.floatCacheMs } : {}),
   });
   const payer: Payer = deps.payer ?? { pay: async (o) => ({ txHash: `demo-pay:${o.id}` }) };
+  const settlementAccountId = deps.settlementAccountId ?? "earmark-settle.near";
   const inflight = new Set<Promise<unknown>>();
   const track = (p: Promise<unknown>) => {
     inflight.add(p);
@@ -350,7 +358,9 @@ export function wireDemo(deps: DemoDeps): DemoWiring {
         },
         { category: "tv", billerCode: "dstv", ref: SANDBOX.smartcard, label: "house DStv" },
       ],
-      rules: preset ? applyPreset(demoRules(familyId, at), preset, at) : demoRules(familyId, at),
+      rules: preset
+        ? applyPreset(demoRules(familyId, at, settlementAccountId), preset, at)
+        : demoRules(familyId, at, settlementAccountId),
       usage: {
         month: lagosMonth(at),
         spentNgnKoboByCategory: { electricity: 0, airtime: 0, data: 0, tv: 0 },

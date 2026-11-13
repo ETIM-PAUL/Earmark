@@ -10,6 +10,7 @@
     "test": "vitest run",
     "check:accounts": "tsx src/check-accounts.ts",
     "spike:agent-api": "tsx src/spike/agent-api.ts",
+    "setup:agent-production": "tsx src/setup/agent-production.ts",
     "spike:vtpass": "tsx src/spike/vtpass.ts",
     "deploy:receipts:testnet": "tsx src/deploy-receipts.ts",
     "drill:billers": "tsx src/drill/billers.ts",
