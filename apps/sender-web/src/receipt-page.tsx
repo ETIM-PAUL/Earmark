@@ -1,7 +1,9 @@
 import type { Receipt } from "@earmark/shared";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ReceiptCard, S } from "./receipt-card.js";
+import { ReceiptCard } from "./receipt-card.js";
+import "./ui/tokens.css";
+import "./ui/pages.css";
 import {
   EXPLORER,
   getFamilyReceipts,
@@ -71,7 +73,12 @@ function OnePayment() {
   }, [value]);
 
   if (value) return <ReceiptCard r={value} network={network} txHash={txHash} check={check} />;
-  if (error && value === undefined) return <p role="alert">{error}</p>;
+  if (error && value === undefined)
+    return (
+      <p role="alert" className="alert">
+        {error}
+      </p>
+    );
   if (value === undefined) return <p>Reading the receipt from NEAR {network}…</p>;
   return <p>No receipt for order {orderId} yet. This page checks again every few seconds.</p>;
 }
@@ -81,7 +88,12 @@ const never = () => false;
 
 function FamilyFeed() {
   const { value, error } = usePoll(loadFamily, never);
-  if (error && !value) return <p role="alert">{error}</p>;
+  if (error && !value)
+    return (
+      <p role="alert" className="alert">
+        {error}
+      </p>
+    );
   if (!value) return <p>Reading receipts from NEAR {network}…</p>;
   if (value.length === 0) return <p>No receipts yet. New ones appear here by themselves.</p>;
   return (
@@ -95,40 +107,46 @@ function FamilyFeed() {
 
 function Page() {
   const body = !contractId ? (
-    <p role="alert">Add ?contract=… to the link.</p>
+    <p role="alert" className="alert">
+      Add ?contract=… to the link.
+    </p>
   ) : orderId ? (
     <OnePayment />
   ) : familyId ? (
     <FamilyFeed />
   ) : (
-    <p role="alert">Add ?order=… or ?family=… to the link.</p>
+    <p role="alert" className="alert">
+      Add ?order=… or ?family=… to the link.
+    </p>
   );
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 480,
-        margin: "0 auto",
-        padding: 16,
-        background: "#fafafa",
-        minHeight: "100vh",
-      }}
-    >
-      <h1 style={{ fontSize: 20 }}>Earmark {orderId ? "receipt" : "receipts"}</h1>
-      {body}
-      <p style={{ ...S.muted, marginTop: 24 }}>
-        Read live from contract{" "}
-        {LOCAL_RPC ? (
-          <>{contractId} on a local demo chain, not NEAR</>
-        ) : (
-          <>
-            <a href={`${EXPLORER[network]}/address/${contractId}`}>{contractId || "(not set)"}</a>{" "}
-            on NEAR {network}
-          </>
-        )}
-        . Names, phone numbers, meter numbers and tokens are never on-chain.
-      </p>
-    </main>
+    <div className="rp">
+      <header className="rp-top">
+        <a className="rp-brand" href="/">
+          Earmark
+        </a>
+        <h1>{orderId ? "Public receipt" : "Public receipts"}</h1>
+        <p>
+          Read live from the receipts contract. Nothing on this page comes from our servers, and it
+          checks the transaction itself.
+        </p>
+      </header>
+      <main className="rp-main">{body}</main>
+      <footer className="rp-foot">
+        <p>
+          Contract{" "}
+          {LOCAL_RPC ? (
+            <>{contractId} on a local demo chain, not NEAR</>
+          ) : (
+            <>
+              <a href={`${EXPLORER[network]}/address/${contractId}`}>{contractId || "(not set)"}</a>{" "}
+              on NEAR {network}
+            </>
+          )}
+          . Names, phone numbers, meter numbers and tokens are never on-chain.
+        </p>
+      </footer>
+    </div>
   );
 }
 

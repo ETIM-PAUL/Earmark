@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { AuthPage } from "./Auth.js";
 import { ApprovalItem, TeamCard } from "./Dashboard.js";
 import { Onboarding } from "./Onboarding.js";
 import type { AppConfig, ApprovalCard, Team } from "./types.js";
@@ -130,5 +131,28 @@ describe("a family of relatives", () => {
       <ApprovalItem card={{ ...card, needed: 1, signedBy: [] }} onChange={() => {}} />,
     );
     expect(html).not.toContain("relatives have signed");
+  });
+});
+
+describe("sign up and sign in", () => {
+  const page = (mode: "signup" | "signin") =>
+    renderToStaticMarkup(<AuthPage mode={mode} onDone={() => {}} />);
+
+  it("sign-up asks for a name, explains passkeys, and links to sign-in", () => {
+    const html = page("signup");
+    expect(html).toContain("Create your account");
+    expect(html).toContain("Your name");
+    expect(html).toContain("Create account with a passkey");
+    expect(html).toContain("There&#x27;s no password to forget or leak");
+    expect(html).toContain('href="#/signin"');
+    expect(html.toLowerCase()).not.toContain('type="password"');
+  });
+
+  it("sign-in needs no name, just the passkey, and links to sign-up", () => {
+    const html = page("signin");
+    expect(html).toContain("Welcome back");
+    expect(html).toContain("Sign in with your passkey");
+    expect(html).not.toContain("Your name");
+    expect(html).toContain('href="#/signup"');
   });
 });

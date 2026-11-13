@@ -2,6 +2,8 @@ import type { Receipt } from "@earmark/shared";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { lagosTime, ReceiptCard, S } from "./receipt-card.js";
+import "./ui/tokens.css";
+import "./ui/pages.css";
 import {
   EXPLORER,
   getFamilyReceipts,
@@ -87,7 +89,7 @@ const post = (path: string, body: object) =>
   }).catch(() => null);
 
 const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
-const btn = { padding: "6px 12px", borderRadius: 8, fontSize: 13 } as const;
+const btn = {} as const;
 
 /** The sender's side: requests waiting for a yes, freeze, and rule presets. */
 function SenderPanel() {
@@ -108,6 +110,7 @@ function SenderPanel() {
         </span>
         <button
           type="button"
+          className="btn small"
           style={btn}
           onClick={() => void post("/sender/freeze", { family: familyId, frozen: !o.frozen })}
         >
@@ -127,7 +130,7 @@ function SenderPanel() {
         {approvals.map((c) => (
           <div
             key={c.orderId}
-            style={{ borderTop: "1px solid #e4e4e7", marginTop: 8, paddingTop: 8 }}
+            style={{ borderTop: "2px dashed var(--rule)", marginTop: 8, paddingTop: 8 }}
           >
             <div>
               <strong>{c.amountNgn}</strong> <span style={S.muted}>(about ${c.amountUsd})</span>
@@ -141,10 +144,18 @@ function SenderPanel() {
               ))}
             </ul>
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" style={btn} onClick={() => void decide(c.orderId, "approved")}>
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => void decide(c.orderId, "approved")}
+              >
                 Approve
               </button>
-              <button type="button" style={btn} onClick={() => void decide(c.orderId, "declined")}>
+              <button
+                type="button"
+                className="btn small quiet"
+                onClick={() => void decide(c.orderId, "declined")}
+              >
                 Decline
               </button>
             </div>
@@ -196,16 +207,23 @@ function SenderPanel() {
   );
 }
 
-function Pane({ title, children }: { title: string; children: React.ReactNode }) {
+function Pane({
+  title,
+  active,
+  children,
+}: {
+  title: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <section
+      className={`judge-pane${active ? " active" : ""}`}
       style={{
-        display: "flex",
-        flexDirection: "column",
         minHeight: 0,
-        border: "1px solid #e4e4e7",
-        borderRadius: 12,
-        background: "#fafafa",
+        border: "2px solid var(--rule)",
+        borderRadius: 10,
+        background: "var(--bg)",
         overflow: "hidden",
       }}
     >
@@ -214,8 +232,8 @@ function Pane({ title, children }: { title: string; children: React.ReactNode })
           fontSize: 14,
           margin: 0,
           padding: "10px 14px",
-          borderBottom: "1px solid #e4e4e7",
-          background: "#fff",
+          borderBottom: "2px solid var(--rule)",
+          background: "var(--surface)",
         }}
       >
         {title}
@@ -257,11 +275,13 @@ function Say() {
             flex: 1,
             padding: 8,
             borderRadius: 8,
-            border: "1px solid #d4d4d8",
+            border: "2px solid var(--rule)",
+            background: "var(--surface)",
+            color: "var(--text)",
             fontSize: 14,
           }}
         />
-        <button type="submit" style={{ padding: "8px 14px", borderRadius: 8 }}>
+        <button type="submit" className="btn small">
           Send
         </button>
       </div>
@@ -276,7 +296,8 @@ function Say() {
             key={t}
             type="button"
             onClick={() => void send(t)}
-            style={{ fontSize: 12, padding: "4px 8px", borderRadius: 12 }}
+            className="chip-btn"
+            style={{ minHeight: 34, padding: "0 0.75rem", fontSize: 13 }}
           >
             {t}
           </button>
@@ -310,8 +331,9 @@ function Chat({ demo }: { demo: { value?: Demo; error?: string } }) {
             overflowWrap: "anywhere",
             padding: "8px 10px",
             borderRadius: 10,
-            background: l.from === "recipient" ? "#dcf8c6" : "#fff",
-            border: "1px solid #e4e4e7",
+            background: l.from === "recipient" ? "var(--primary)" : "var(--surface-high)",
+            color: l.from === "recipient" ? "var(--on-primary)" : "var(--on-surface)",
+            border: "0",
             fontSize: 14,
           }}
         >
@@ -368,20 +390,28 @@ function Chain({
   );
 }
 
+const TABS = [
+  { key: "sender", label: "Sender app" },
+  { key: "chat", label: "Recipient chat" },
+  { key: "chain", label: "NEAR explorer" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
 function Judge() {
   const demo = useEvery(2_000, loadDemo);
   const receipts = useEvery(3_000, loadChain);
+  const [tab, setTab] = useState<TabKey>("sender");
   if (!familyId || !contractId)
     return <p role="alert">Open the judge link that pnpm start:bot (or make demo) prints.</p>;
   return (
     <main
       style={{
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: "var(--font-body)",
         height: "100vh",
         boxSizing: "border-box",
         padding: 12,
         display: "grid",
-        gridTemplateRows: "auto 1fr",
+        gridTemplateRows: "auto auto 1fr",
         gap: 12,
       }}
     >
@@ -394,7 +424,9 @@ function Judge() {
           gap: 8,
         }}
       >
-        <strong>Earmark · one family, three views</strong>
+        <strong style={{ fontFamily: "var(--font-display)", fontSize: 20 }}>
+          Earmark: one family, three views
+        </strong>
         <span style={S.muted}>
           {familyId} · contract{" "}
           {LOCAL_RPC ? (
@@ -407,29 +439,28 @@ function Judge() {
           )}
         </span>
       </header>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: 12,
-          minHeight: 0,
-        }}
-      >
-        <Pane title="Sender app (abroad)">
+      <div className="judge-tabs" role="tablist" aria-label="Pick a view">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            className={`judge-tab${tab === t.key ? " active" : ""}`}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="judge-panes">
+        <Pane title="Sender app (abroad)" active={tab === "sender"}>
           <SenderPanel />
-          <p style={{ ...S.muted, marginTop: 16 }}>
-            The sender's receipts feed, read from the chain:
-          </p>
-          <iframe
-            title="Receipts feed"
-            src={`/receipt.html?network=${network}&contract=${contractId}&family=${familyId}${LOCAL_RPC ? `&rpc=${encodeURIComponent(LOCAL_RPC)}` : ""}`}
-            style={{ width: "100%", height: 480, border: 0, background: "#fff", borderRadius: 8 }}
-          />
         </Pane>
-        <Pane title="Recipient chat (Nigeria)">
+        <Pane title="Recipient chat (Nigeria)" active={tab === "chat"}>
           <Chat demo={demo} />
         </Pane>
-        <Pane title="NEAR explorer (public)">
+        <Pane title="NEAR explorer (public)" active={tab === "chain"}>
           <Chain receipts={receipts} demo={demo.value} />
         </Pane>
       </div>

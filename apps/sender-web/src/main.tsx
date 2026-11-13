@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App.js";
+import "./ui/tokens.css";
 import "./app/app.css";
 
 // The sender app: passkey sign-in, family setup, approvals, rules, freeze

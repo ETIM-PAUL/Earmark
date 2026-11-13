@@ -3,10 +3,308 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Earmark</title>
+    <title>Earmark: pay the light bill back home, on your terms</title>
+    <meta
+      name="description"
+      content="Fund a family account, set the rules, and let your family ask an assistant to pay electricity, airtime, data and TV. Every payment gets a public receipt on NEAR."
+    />
+    <meta name="theme-color" content="#f6fbf4" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500&family=Google+Sans+Flex:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/ui/tokens.css" />
+    <link rel="stylesheet" href="/src/landing/landing.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <a class="visually-hidden skip" href="#how">Skip to the explanation</a>
+
+    <header class="hero">
+      <div class="wrap">
+        <nav class="nav" aria-label="Main">
+          <a class="wordmark" href="/" aria-label="Earmark home">
+            <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="#1f6a48"/><path d="M8 6h5.5l3.5 3.5V18H8z" fill="#fff"/><path d="M13.5 6v3.5H17z" fill="#ffdf9e"/></svg>
+            Earmark
+          </a>
+          <div class="nav-links">
+            <a href="#how">How it works</a>
+            <a href="#rules">Rules</a>
+            <a href="#family">Relatives</a>
+            <a href="#receipts">Receipts</a>
+          </div>
+          <div class="nav-cta">
+            <a class="nav-signin" href="/app/#/signin">Sign in</a>
+            <a class="btn small on-dark" href="/app/#/signup">Create account</a>
+          </div>
+        </nav>
+
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <h1>Pay the light bill back home, on your terms.</h1>
+            <p class="lede">
+              Fund one family account and set the rules. Your family asks an assistant on Telegram
+              or WhatsApp, in English or Pidgin, to pay electricity, airtime, data or TV. Anything
+              outside your rules comes to you first.
+            </p>
+            <div class="hero-actions">
+              <a class="btn mark large" href="/app/#/signup">Create your account</a>
+              <a class="btn ghost-dark large" href="#how">See how it works</a>
+            </div>
+            <p class="hero-fine">
+              Built on NEAR. Every payment leaves a public receipt with no names or numbers on it.
+            </p>
+          </div>
+
+          <section class="demo" id="demo" aria-label="A family member asks for light and gets a receipt">
+            <div class="phone">
+              <div class="phone-bar">
+                <span class="dot" aria-hidden="true"></span>
+                Earmark assistant
+              </div>
+              <ol class="chat" id="chat" aria-live="polite"></ol>
+            </div>
+            <div class="stub-wrap printer" id="stub" hidden>
+              <article class="stub" aria-label="Public receipt">
+                <div class="stub-body">
+                  <span class="kind">Electricity</span>
+                  <span class="amount">₦5,000</span>
+                  <span class="fine">About $3.77 USDC, 12 Nov 2026, 21:04 Lagos time</span>
+                  <span class="status-paid">Paid</span>
+                  <span class="fine">No name, no meter number, no token. Just the proof.</span>
+                </div>
+                <div class="stub-foot">Recorded on NEAR. Anyone can check it.</div>
+              </article>
+            </div>
+            <button type="button" class="replay" id="replay" hidden>Play again</button>
+          </section>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section how" id="how" aria-labelledby="how-h">
+        <div class="wrap">
+          <h2 id="how-h">Four steps, and only the first is yours.</h2>
+          <ol class="steps">
+            <li>
+              <h3>You fund the account and set the rules</h3>
+              <p>
+                Add money once as USDC. Pick a preset, or set a monthly budget, a cap for each bill,
+                and the amount above which your family has to ask you.
+              </p>
+            </li>
+            <li>
+              <h3>They ask in their own words</h3>
+              <p>
+                Mama writes "abeg buy 5k light for my meter". The assistant reads the request and
+                finds the meter. It never touches the money.
+              </p>
+            </li>
+            <li>
+              <h3>The rules decide</h3>
+              <p>
+                Code checks your rules after she says YES, not the assistant. Inside the rules, it
+                pays. Outside them, the request waits for you.
+              </p>
+            </li>
+            <li>
+              <h3>A public receipt is recorded</h3>
+              <p>
+                The amount, the kind of bill and the time go on NEAR. Names, phone numbers, meter
+                numbers and tokens never do.
+              </p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section rules" id="rules" aria-labelledby="rules-h">
+        <div class="wrap split">
+          <div class="copy">
+            <h2 id="rules-h">Rules the assistant can't talk its way past.</h2>
+            <p class="lede">
+              The assistant only reads the request. Your rules run as code, every time, after your
+              family says YES.
+            </p>
+            <dl class="defs">
+              <div>
+                <dt>Hard limits</dt>
+                <dd>
+                  A monthly budget and a most-per-payment amount, signed into the family account.
+                  Even a bug on our side can't go past them.
+                </dd>
+              </div>
+              <div>
+                <dt>Soft rules</dt>
+                <dd>
+                  Turn each bill on or off, cap it for the month, and choose the amount above which
+                  they need your yes.
+                </dd>
+              </div>
+              <div>
+                <dt>Presets</dt>
+                <dd>
+                  Start from Open, Essentials, Bills only or Strict, then change one rule at a time.
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <figure class="approval-figure">
+            <div class="stub-wrap">
+              <div class="approval dogear" role="img" aria-label="An example approval request for 25,000 naira of electricity">
+                <p class="a-amount">₦25,000</p>
+                <p class="a-sub">About $18.85</p>
+                <p class="a-what">Ikeja Electric prepaid electricity</p>
+                <p class="a-who">MAMA NGOZI ADEYEMI, meter 1111…1111</p>
+                <p class="a-why">This is above the ₦20,000 you set for one payment.</p>
+                <div class="a-actions" aria-hidden="true">
+                  <span class="fake approve">Approve</span>
+                  <span class="fake decline">Decline</span>
+                </div>
+              </div>
+            </div>
+            <figcaption>
+              You confirm with your fingerprint, face or PIN. Nothing is paid until you do.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section family" id="family" aria-labelledby="family-h">
+        <div class="wrap split flip">
+          <div class="copy">
+            <h2 id="family-h">Share it with the relatives who share the bills.</h2>
+            <p class="lede">
+              Invite up to four relatives. Each signs in with their own passkey. Ask for two
+              signatures on large payments and rule changes, so no one person decides alone.
+            </p>
+            <p>
+              Stopping is always quick: any one relative can decline a payment or freeze the
+              account.
+            </p>
+          </div>
+          <div class="signers" role="img" aria-label="Two of three relatives have signed a large payment">
+            <p class="signers-title">₦25,000 electricity</p>
+            <ul>
+              <li><span class="avatar">A</span> Ada <strong class="ok">Signed</strong></li>
+              <li><span class="avatar">B</span> Bola <strong class="ok">Signed</strong></li>
+              <li><span class="avatar">C</span> Chidi <strong class="wait">Waiting</strong></li>
+            </ul>
+            <p class="signers-note">2 of 2 needed. Paid.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section receipts" id="receipts" aria-labelledby="receipts-h">
+        <div class="wrap split">
+          <div class="stub-wrap tilt">
+            <article class="stub" aria-label="Example public receipt">
+              <div class="stub-body">
+                <span class="kind">Data</span>
+                <span class="amount">₦3,000</span>
+                <span class="fine">About $2.26 USDC, 9 Nov 2026, 08:12 Lagos time</span>
+                <span class="status-paid">Paid</span>
+              </div>
+              <div class="stub-foot">Checked on NEAR just now</div>
+            </article>
+          </div>
+          <div class="copy">
+            <h2 id="receipts-h">Proof anyone can check, with nothing private in it.</h2>
+            <p class="lede">
+              A receipt page doesn't take our word for it. It reads the contract on NEAR and checks
+              the transaction itself:
+            </p>
+            <ol class="checks">
+              <li>It finds the transaction on NEAR.</li>
+              <li>It confirms the right contract handled it.</li>
+              <li>It matches our recorded event to this exact order.</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="section wrong" aria-labelledby="wrong-h">
+        <div class="wrap">
+          <h2 id="wrong-h">When something goes wrong, the money doesn't disappear.</h2>
+          <div class="wrong-grid">
+            <div>
+              <h3>The biller fails the bill</h3>
+              <p>
+                The money goes back to the family account, the family is told, and the receipt
+                says Refunded.
+              </p>
+            </div>
+            <div>
+              <h3>The biller is slow</h3>
+              <p>
+                We check what happened before trying again, so a bill is never bought twice.
+              </p>
+            </div>
+            <div>
+              <h3>The biller is down</h3>
+              <p>Your family is asked to try again in a minute, and nothing is charged.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section status" aria-labelledby="status-h">
+        <div class="wrap">
+          <h2 id="status-h">What works today</h2>
+          <p class="lede">
+            Earmark is a hackathon build. Here is what is real and what isn't.
+          </p>
+          <dl class="defs wide">
+            <div>
+              <dt>Working</dt>
+              <dd>
+                Passkey sign-in, family rules and approvals, relatives co-signing, the assistant in
+                English and Pidgin on Telegram, and public receipts from a contract on NEAR
+                testnet.
+              </dd>
+            </div>
+            <div>
+              <dt>Simulated in the local demo</dt>
+              <dd>
+                The biller and the chain, so you can try everything with no keys and no real money.
+              </dd>
+            </div>
+            <div>
+              <dt>Not live yet</dt>
+              <dd>
+                Adding money and payments on mainnet. The Top up screen says so, rather than show a
+                made-up balance.
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="cta" aria-labelledby="cta-h">
+        <div class="wrap">
+          <h2 id="cta-h">Try it in two minutes.</h2>
+          <p class="lede">
+            Create an account with a passkey, set up a demo family and ask for a bill.
+          </p>
+          <div class="hero-actions">
+            <a class="btn mark" href="/app/#/signup">Create your account</a>
+            <a class="btn ghost-dark" href="/app/#/signin">Sign in</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap">
+        <p><strong>Earmark</strong></p>
+        <p>Built for the NEAR hackathon, in the Real world and Agents tracks.</p>
+        <p>Open source under the MIT license.</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/landing/landing.ts"></script>
   </body>
 </html>

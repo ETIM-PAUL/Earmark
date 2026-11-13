@@ -1,0 +1,363 @@
+/*
+ * Earmark design tokens, shared by the landing page, the sender app and the
+ * public receipt pages. Material 3: tonal colour roles from one green seed,
+ * a shape scale, a type scale set in Google Sans Flex, and state layers
+ * instead of shadows. Amber (the tertiary role) is reserved for what is
+ * waiting for a person. The receipt slip, set in Google Sans Code, is the
+ * one object that is Earmark's own.
+ *
+ * Fonts come from the <link> in each page's head; the stacks are fallbacks.
+ */
+
+:root {
+  /* Colour roles (light) */
+  --primary: #1f6a48;
+  --on-primary: #ffffff;
+  --primary-container: #b3f0cd;
+  --on-primary-container: #002113;
+  --secondary-container: #d3e8d9;
+  --on-secondary-container: #0e1f15;
+  --tertiary: #7a5900;
+  --tertiary-container: #ffdf9e;
+  --on-tertiary-container: #261a00;
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+  --on-error-container: #410002;
+
+  --surface: #f6fbf4;
+  --surface-low: #f0f5ee;
+  --surface-container: #eaefe8;
+  --surface-high: #e4eae2;
+  --surface-highest: #dee4dc;
+  --surface-lowest: #ffffff;
+  --on-surface: #171d19;
+  --on-surface-variant: #404942;
+  --outline: #707971;
+  --outline-variant: #c0c9c1;
+  --scrim: rgb(0 0 0 / 0.4);
+  --focus: #0b57d0;
+
+  /* The names the screens use */
+  --bg: var(--surface);
+  --text: var(--on-surface);
+  --text-2: var(--on-surface-variant);
+  --rule: var(--outline-variant);
+  --edge: var(--outline);
+  --raised: var(--surface-container);
+  --brand: var(--primary);
+  --on-brand: var(--on-primary);
+  --good: #1f6a48;
+  --good-bg: var(--primary-container);
+  --bad: var(--error);
+  --bad-bg: var(--error-container);
+  --hi: var(--tertiary-container);
+  --hi-text: var(--on-tertiary-container);
+  --hi-edge: var(--tertiary);
+  --ink: #171d19;
+  --white: #ffffff;
+  --light: #edf2eb;
+  --amber: #a8741a;
+  --accent: var(--primary);
+  --accent-soft: #95d5b2;
+  --slip: #ffffff;
+  --ink-2: #404942;
+  --green: #1f6a48;
+  --red: #ba1a1a;
+  --mark: var(--amber);
+
+  /* Type: Google Sans Flex, and Google Sans Code on slips and figures */
+  --font-display:
+    "Google Sans Flex", "Google Sans", "Roboto Flex", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-body:
+    "Google Sans Flex", "Google Sans", "Roboto Flex", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: "Google Sans Code", ui-monospace, "SF Mono", Menlo, monospace;
+  --display-stretch: 100%;
+
+  /* Scale: label 14, body 16, lede 18, title 22, headline 32 */
+  --step--1: 0.875rem;
+  --step-0: 1rem;
+  --step-1: 1.125rem;
+  --step-2: 1.375rem;
+  --step-3: 1.375rem;
+  --step-4: 2rem;
+  --step-5: 2rem;
+
+  /* Shape scale */
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 28px;
+  --r-xxl: 40px;
+  --r-control: 12px;
+  --r-panel: 24px;
+  --r-full: 999px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-surface="app"]:not([data-theme="light"]) {
+    --primary: #97d4b1;
+    --on-primary: #00391f;
+    --primary-container: #0b5233;
+    --on-primary-container: #b3f0cd;
+    --secondary-container: #36493c;
+    --on-secondary-container: #d3e8d9;
+    --tertiary: #f0c05a;
+    --tertiary-container: #5b4300;
+    --on-tertiary-container: #ffdf9e;
+    --error: #ffb4ab;
+    --error-container: #93000a;
+    --on-error-container: #ffdad6;
+    --surface: #0f1511;
+    --surface-low: #171d19;
+    --surface-container: #1b211d;
+    --surface-high: #252b27;
+    --surface-highest: #303632;
+    --surface-lowest: #0a0f0c;
+    --on-surface: #dee4dc;
+    --on-surface-variant: #c0c9c1;
+    --outline: #8a938b;
+    --outline-variant: #404942;
+    --scrim: rgb(0 0 0 / 0.6);
+    --focus: #a8c7fa;
+    --good: #97d4b1;
+    --hi-edge: #f0c05a;
+    --accent-soft: #97d4b1;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 var(--step-0) / 1.5 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0;
+  margin: 0;
+  text-wrap: balance;
+}
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+a {
+  color: inherit;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Buttons: pills. Filled is the one primary action on a screen. State layers
+   (hover 8%, press 12%) are drawn over whatever colour the button has. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0 1.5rem;
+  border: 1px solid var(--brand);
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: var(--on-brand);
+  font: 500 var(--step--1) / 1.25 var(--font-body);
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:hover {
+  background-image: linear-gradient(
+    color-mix(in srgb, currentColor 8%, transparent),
+    color-mix(in srgb, currentColor 8%, transparent)
+  );
+}
+.btn:active {
+  background-image: linear-gradient(
+    color-mix(in srgb, currentColor 12%, transparent),
+    color-mix(in srgb, currentColor 12%, transparent)
+  );
+}
+.btn[disabled] {
+  background: color-mix(in srgb, var(--on-surface) 12%, transparent);
+  border-color: transparent;
+  color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+  cursor: not-allowed;
+  background-image: none;
+}
+.btn.quiet {
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--outline);
+}
+.btn.quiet[disabled] {
+  border-color: color-mix(in srgb, var(--on-surface) 12%, transparent);
+}
+.btn.stop {
+  background: transparent;
+  color: var(--error);
+  border-color: var(--outline);
+}
+.btn.small {
+  min-height: 40px;
+  padding: 0 1rem;
+}
+
+/* Form fields: outlined, with the label above so it never moves. */
+.field {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 500;
+  font-size: var(--step--1);
+  color: var(--on-surface-variant);
+}
+.field input,
+.field select {
+  min-height: 56px;
+  padding: 0 1rem;
+  border: 1px solid var(--outline);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text);
+  font: 400 var(--step-0) / 1.25 var(--font-body);
+}
+.field input:hover,
+.field select:hover {
+  border-color: var(--on-surface);
+}
+.field input:focus-visible,
+.field select:focus-visible {
+  border-color: var(--primary);
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.field input:disabled {
+  opacity: 0.5;
+}
+.field .hint {
+  font-weight: 400;
+  color: var(--text-2);
+}
+
+/* The slip: what a prepaid meter prints. Google Sans Code on white, torn at
+   the bottom. Wrap it in .stub-wrap for the shadow (a filter on the masked
+   element itself would be clipped by the mask). */
+.stub-wrap {
+  filter: drop-shadow(0 4px 12px rgb(23 29 25 / 0.16));
+}
+.stub {
+  --tooth: 8px;
+  position: relative;
+  background: #ffffff;
+  color: #171d19;
+  font-family: var(--font-mono);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  padding-bottom: var(--tooth);
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth)) no-repeat,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom /
+    calc(var(--tooth) * 2) var(--tooth) repeat-x;
+  mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth)) no-repeat,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom /
+    calc(var(--tooth) * 2) var(--tooth) repeat-x;
+}
+.stub-body {
+  padding: 1.5rem 1.5rem 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.stub-foot {
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  border-top: 1px dashed #aab3ab;
+  font-size: var(--step--1);
+  color: #404942;
+}
+.stub .amount {
+  font: 500 var(--step-4) / 1.1 var(--font-mono);
+  color: #171d19;
+}
+.stub .kind {
+  font: 500 var(--step-2) / 1.25 var(--font-display);
+}
+.stub .fine {
+  font-size: var(--step--1);
+  color: #404942;
+}
+.stub .status-paid {
+  color: #1f6a48;
+  font-weight: 500;
+}
+.stub .status-refunded {
+  color: #ba1a1a;
+  font-weight: 500;
+}
+.stub .mono {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* Status: an assist chip, not a bubble */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 0.5rem;
+  border-radius: var(--r-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.pill.ok {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+.pill.wait {
+  background: var(--tertiary-container);
+  color: var(--on-tertiary-container);
+}
+.pill.bad {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

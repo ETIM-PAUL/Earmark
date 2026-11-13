@@ -1,0 +1,121 @@
+/* The judge view's three panes (sender, chat, chain). Tabs below 900px;
+   side by side above it, where the tab bar is hidden and every pane shows. */
+.judge-tabs {
+  display: flex;
+  gap: 6px;
+}
+.judge-tab {
+  flex: 1;
+  padding: 10px 8px;
+  border: 2px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: 500 var(--step--1) / 1 var(--font-body);
+  cursor: pointer;
+}
+.judge-tab.active {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+.judge-panes {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+.judge-pane {
+  display: none;
+  flex-direction: column;
+}
+.judge-pane.active {
+  display: flex;
+}
+@media (min-width: 900px) {
+  .judge-tabs {
+    display: none;
+  }
+  .judge-panes {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .judge-pane {
+    display: flex;
+  }
+}
+
+/* Shared by the public receipt page and the judge view. */
+.alert {
+  padding: 1rem 1.5rem;
+  background: var(--error-container);
+  color: var(--on-error-container);
+  border-radius: var(--r-md);
+  font-weight: 500;
+}
+.fine {
+  font-size: var(--step--1);
+  color: var(--text-2);
+}
+.chip-btn {
+  border: 1px solid var(--outline);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  font: 500 var(--step--1) / 1 var(--font-body);
+  cursor: pointer;
+}
+.stub .fine {
+  display: block;
+}
+
+.rp {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.rp-top {
+  margin: 0.5rem;
+  padding: 1.5rem 1.5rem 2.5rem;
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+  border-radius: var(--r-xl);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+.rp-top h1 {
+  font-size: var(--step-4);
+  font-weight: 400;
+  line-height: 1.2;
+}
+.rp-top p {
+  max-width: 34em;
+  color: var(--on-primary-container);
+}
+.rp-brand {
+  color: var(--on-primary-container);
+  text-decoration: none;
+  font: 500 var(--step-2) / 1 var(--font-display);
+}
+.rp-main {
+  flex: 1;
+  width: min(100%, 44rem);
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+.rp-main .stub-wrap {
+  max-width: 24rem;
+}
+.rp-foot {
+  padding: 1.5rem 1rem 2rem;
+  width: min(100%, 44rem);
+  margin: 0 auto;
+  color: var(--text-2);
+  font-size: var(--step--1);
+}
+.rp-foot a {
+  color: var(--primary);
+  font-weight: 500;
+}

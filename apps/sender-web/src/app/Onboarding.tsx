@@ -29,7 +29,7 @@ export function Onboarding({
   if (joining) return <Join onJoined={onJoined} onBack={() => setJoining(false)} />;
   return (
     <>
-      <button type="button" className="ghost" onClick={() => setJoining(true)}>
+      <button type="button" className="btn quiet" onClick={() => setJoining(true)}>
         A relative invited me: join their family
       </button>
       <CreateFamily config={config} onCreated={onCreated} />
@@ -56,15 +56,15 @@ function Join({ onJoined, onBack }: { onJoined: (familyId: string) => void; onBa
     }
   }
   return (
-    <form className="stack" onSubmit={join}>
+    <form className="stack-lg" onSubmit={join}>
       <header>
         <h1>Join a family</h1>
-        <p className="muted">
+        <p className="lede-app">
           Type the code your relative gave you. You'll see the same budget and payments, and sign
           large payments and rule changes with your own passkey.
         </p>
       </header>
-      <label>
+      <label className="field">
         Code
         <input
           autoCapitalize="characters"
@@ -74,10 +74,10 @@ function Join({ onJoined, onBack }: { onJoined: (familyId: string) => void; onBa
           onChange={(e) => setCode(e.target.value)}
         />
       </label>
-      <button type="submit" className="primary" disabled={busy || code.trim().length < 8}>
+      <button type="submit" className="btn" disabled={busy || code.trim().length < 8}>
         {busy ? "Joining…" : "Join"}
       </button>
-      <button type="button" className="ghost" onClick={onBack}>
+      <button type="button" className="btn quiet" onClick={onBack}>
         Back
       </button>
       {error && (
@@ -132,15 +132,15 @@ function CreateFamily({
   }
 
   return (
-    <form className="stack" onSubmit={create}>
+    <form className="stack-lg" onSubmit={create}>
       <header>
         <h1>Set up your family</h1>
-        <p className="muted">Three short steps. You can change everything later.</p>
+        <p className="lede-app">Three short steps. You can change everything later.</p>
       </header>
 
-      <section className="card stack">
+      <section className="stack">
         <h2>1. Who are you paying for?</h2>
-        <label>
+        <label className="field">
           Their phone number
           <input
             inputMode="tel"
@@ -153,9 +153,9 @@ function CreateFamily({
         </label>
       </section>
 
-      <section className="card stack">
+      <section className="stack">
         <h2>2. Their meters and decoders</h2>
-        <p className="muted">
+        <p className="fine">
           Optional. Saved numbers let them say "my meter" instead of typing it. The demo meter
           1111111111111 and decoder 1212121212 work in this build.
         </p>
@@ -211,7 +211,7 @@ function CreateFamily({
           {meters.length < 5 && (
             <button
               type="button"
-              className="ghost"
+              className="btn quiet small"
               onClick={() => setMeters([...meters, newRow()])}
             >
               + Another meter
@@ -220,7 +220,7 @@ function CreateFamily({
           {cards.length < 3 && (
             <button
               type="button"
-              className="ghost"
+              className="btn quiet small"
               onClick={() => setCards([...cards, newRow("House TV")])}
             >
               + TV decoder
@@ -229,9 +229,9 @@ function CreateFamily({
         </div>
       </section>
 
-      <section className="card stack">
+      <section className="stack">
         <h2>3. Your rules</h2>
-        <p className="muted">Start from one. Anything outside it comes to you for a yes or no.</p>
+        <p className="fine">Start from one. Anything outside it comes to you for a yes or no.</p>
         <div className="choices" role="radiogroup" aria-label="Rule preset">
           {config.presets.map((p) => (
             <label key={p.name} className={`choice ${preset === p.name ? "on" : ""}`}>
@@ -254,7 +254,7 @@ function CreateFamily({
           {error}
         </p>
       )}
-      <button type="submit" className="primary" disabled={busy}>
+      <button type="submit" className="btn" disabled={busy}>
         {busy ? "Creating…" : "Create family"}
       </button>
     </form>
