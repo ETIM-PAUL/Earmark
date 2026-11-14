@@ -15,7 +15,10 @@ services:
       - key: BOT_PORT
         value: 10000 # matches Render's default expected port
       - key: WEB_APP_URL
-        value: https://earmark-web.onrender.com
+        # Must match earmark-web's REAL onrender.com hostname below, which
+        # Render may suffix (e.g. earmark-web-xxxx) if the plain name is
+        # taken. The bot's CORS check trusts only this origin.
+        value: https://earmark-web-o0gi.onrender.com
       # Set these in the Render dashboard; never committed. See .env.example.
       - key: NEAR_AI_API_KEY
         sync: false

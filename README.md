@@ -1,5 +1,7 @@
 # Earmark
 
+**Live app:** [earmark-web-o0gi.onrender.com](https://earmark-web-o0gi.onrender.com) · **Demo video (3½ min):** [watch on Google Drive](https://drive.google.com/file/d/1GjIurZJ0wXwsJAfjelTqCeFIcOg-BbAZ/view?usp=sharing)
+
 **Judges:** start with [JUDGES.md](JUDGES.md): the [hosted app](https://earmark-web-o0gi.onrender.com), receipts read live from NEAR, and one command per claim with what you should see.
 
 **What it is.** Send money home with rules. Someone abroad funds a family account from any chain and signs spending rules once. A family member then asks an AI assistant, in English or Pidgin, to pay household bills inside those rules: prepaid electricity, airtime, data and TV. Every payment gets a public receipt on NEAR with no personal data.
@@ -8,7 +10,7 @@
 
 **Status.** Built for the NEAR hackathon (tracks `realworld` and `agents`). The recipient side works end to end (chat → rules → biller → receipt → public page), and the sender web app is real: passkey sign-in, rules, approvals, freeze, a list of phones/meters/decoders the sender approved, and several relatives co-signing on one family. Settlement runs on NEAR testnet: a family vault contract holds each family's test USDC and pays our settlement account only inside the sender's hard limits, which it checks itself; the bot's key can only call `pay`. Not built yet: funding from real chains, refunds on-chain, and anything on mainnet. See [What is real and what is not](#what-is-real-and-what-is-not).
 
-**Eligibility (Q-007/Q-010 of [HACKATHON.md](HACKATHON.md)).** NEAR Intents has no testnet, so the Agent API pieces are spiked against mainnet with tiny dry-run amounts; everything else — the receipts contract, every order, every payment in this build — runs on testnet or a sandbox, and stays there through judging.
+**Networks.** NEAR Intents has no testnet, so the Agent API pieces are spiked against mainnet with tiny dry-run amounts; everything else — the receipts contract, every order, every payment in this build — runs on testnet or a sandbox, and stays there through judging.
 
 ## Screenshots
 
@@ -101,7 +103,7 @@ No mainnet transaction exists yet. The family vault is live on testnet at [`earm
 | `contracts/receipts`  | NEAR contract holding on-chain receipts, with no personal data                                                                                                   |
 | `contracts/vault`     | NEAR family vault (testnet): pays settlement only inside the sender's hard limits                                                                                |
 | `contracts/test-usdc` | NEP-141 test dollar with an open faucet, for the vault on testnet                                                                                                |
-| `services/orders`     | Placeholder service that only answers `/health`; the money flow (Phase 8) will live here                                                                         |
+| `services/orders`     | Placeholder service that only answers `/health`; the money flow will move here                                                                                   |
 | `services/billers`    | Biller service: VTpass purchases, naira quotes, the float guard, and the order executor with refunds                                                             |
 | `bot`                 | Telegram and WhatsApp assistant on NEAR AI Cloud                                                                                                                 |
 | `apps/sender-web`     | Sender web app: passkey sign-in, rules, the phone/meter/decoder allowlist, family co-signing, approvals, receipts feed and top-ups (not available in this build) |
@@ -126,7 +128,7 @@ Check that every account and key works (read-only; moves no money):
 pnpm check:accounts
 ```
 
-Agent API spike (Phase 4). Without `SPIKE_ALLOW_WRITES=true` it runs read-only preflight checks; with it, it creates a family account on mainnet and moves about $1 to the settlement account:
+Agent API spike. Without `SPIKE_ALLOW_WRITES=true` it runs read-only preflight checks; with it, it creates a family account on mainnet and moves about $1 to the settlement account:
 
 ```sh
 pnpm spike:agent-api
@@ -148,27 +150,27 @@ pnpm deploy:vault:testnet
 pnpm build:ts && pnpm drill:vault    # report in evidence/vault-drill.md
 ```
 
-Biller drill (Phase 9). Runs 20 paid orders through the order executor: real VTpass sandbox purchases, live NGN/USD quotes, the float guard and on-chain receipts on the testnet contract. Two orders are forced to fail and must refund. The payment into settlement and the refund are simulated until the money flow (Phase 8) lands. Takes about 15 minutes: VTpass refuses a repeat bill for the same number within 30 seconds, so bills for the sandbox's single test phone number queue one behind another:
+Biller drill. Runs 20 paid orders through the order executor: real VTpass sandbox purchases, live NGN/USD quotes, the float guard and on-chain receipts on the testnet contract. Two orders are forced to fail and must refund. The payment into settlement and the refund are simulated in this drill. Takes about 15 minutes: VTpass refuses a repeat bill for the same number within 30 seconds, so bills for the sandbox's single test phone number queue one behind another:
 
 ```sh
 pnpm drill:billers   # needs pnpm deploy:receipts:testnet first; report in .earmark/
 ```
 
-The assistant (Phase 10): Telegram and WhatsApp in front of a NEAR AI Cloud model. The model only reads each message into fields; the biller, the number checks, the price, the YES and every rule check are code. In demo mode each chat gets its own demo family wired to the VTpass sandbox test meter, smartcard and phone, and a YES really buys in the sandbox and writes a testnet receipt. The payment into settlement is simulated until Phase 8:
+The assistant: Telegram and WhatsApp in front of a NEAR AI Cloud model. The model only reads each message into fields; the biller, the number checks, the price, the YES and every rule check are code. In demo mode each chat gets its own demo family wired to the VTpass sandbox test meter, smartcard and phone, and a YES really buys in the sandbox and writes a testnet receipt. With the six `VAULT_TESTNET_*` values set, the payment into settlement goes through the family vault on NEAR testnet; without them it is simulated:
 
 ```sh
 pnpm build && pnpm start:bot   # prints an invite link for a demo family, and its judge view
 pnpm eval:bot                  # 15 English and Pidgin phrasings through the real model
 ```
 
-Recipient flow and public receipts (Phase 13). The recipient opens the invite link (`t.me/<bot>?start=<code>`, or `start <code>` on WhatsApp) and the chat is connected to the family. Each payment gets a public page with the amount, bill type, time and on-chain transaction, and no names, phone numbers, meter numbers or tokens. The page checks the transaction against the chain itself. The judge view shows one family in three panes: the sender's app, the recipient's chat (long numbers masked) and the chain:
+Recipient flow and public receipts. The recipient opens the invite link (`t.me/<bot>?start=<code>`, or `start <code>` on WhatsApp) and the chat is connected to the family. Each payment gets a public page with the amount, bill type, time and on-chain transaction, and no names, phone numbers, meter numbers or tokens. The page checks the transaction against the chain itself. The judge view shows one family in three panes: the sender's app, the recipient's chat (long numbers masked) and the chain:
 
 ```sh
 pnpm --filter @earmark/sender-web dev   # serves receipt.html and judge.html on :5173
 pnpm drill:recipient                    # one message → sandbox purchase → receipt on the page, timed
 ```
 
-Hardening and failure drills (Phase 16). The drills run the bot, the demo wiring, the order executor and the float guard end to end against a simulated VTpass, payer and chain, with no keys. Each one must end in a clear message plus a refund or a retry, never a lost payment. They run in CI on every push to `main`. The audit looks for secrets in every file git would commit and, locally, for every `.env` secret value in the whole git history; it prints names, never values:
+Hardening and failure drills. The drills run the bot, the demo wiring, the order executor and the float guard end to end against a simulated VTpass, payer and chain, with no keys. Each one must end in a clear message plus a refund or a retry, never a lost payment. They run in CI on every push to `main`. The audit looks for secrets in every file git would commit and, locally, for every `.env` secret value in the whole git history; it prints names, never values:
 
 ```sh
 pnpm drill:failures   # VTpass down, float empty, wrong meter, double YES, Agent API error, RPC down…
@@ -186,14 +188,14 @@ Names, phone numbers, meter numbers and tokens never go on-chain. Each receipt c
 
 ## Tracks
 
-`realworld` and `agents`, per the ids in [HACKATHON.md](HACKATHON.md). Earmark is a stablecoin remittance rail a family could use tomorrow (`realworld`: STABLECOINS, NEAR INTENTS), fronted by an agent the recipient talks to in plain English or Pidgin that never holds a key of its own — every spend is checked against sender-signed rules in code, and large or unlisted spends need a passkey-signed approval (`agents`: AGENT COMMERCE). We did not claim `social`: that track's hint is to build on top of Sputnik DAO and Trezu rather than roll your own multisig, and the family co-signing here is exactly a rolled-your-own multisig, built before that hint existed as a track fit. Naming it instead of claiming it felt more honest than stretching the fit.
+`realworld` and `agents`. Earmark is a stablecoin remittance rail a family could use tomorrow (`realworld`: STABLECOINS, NEAR INTENTS), fronted by an agent the recipient talks to in plain English or Pidgin that never holds a key of its own — every spend is checked against sender-signed rules in code, and large or unlisted spends need a passkey-signed approval (`agents`: AGENT COMMERCE). We did not claim `social`: that track's hint is to build on top of Sputnik DAO and Trezu rather than roll your own multisig, and the family co-signing here is exactly a rolled-your-own multisig, built before that hint existed as a track fit. Naming it instead of claiming it felt more honest than stretching the fit.
 
 ## Baseline and disclosure
 
 - **No code from before the hackathon.** Open-source libraries in use: zod, React, Vite, near-sdk-rs, near-workspaces, vitest, Biome, `@near-intents-agent-api/sdk` and near-api-js. The Agent API flows follow the patterns in the NEAR-Intents-Agent-API SDK README and examples repository.
 - **Our role.** Earmark is the naira settlement partner: families pay USDC to our settlement account, and we pay the bill from our VTpass wallet in naira. The VTpass float is ours, topped up in naira.
 - **Mocked in** `make demo`**:** VTpass, the chain, the model and the naira rate (table above). The simulated VTpass delivers every bill; the real one can refuse, delay or reverse, which the drills cover.
-- **Not built yet:** the money flow (Phase 8), funding and top-ups (the funding half of Phase 12, which needs the mainnet accounts), sign-in with a NEAR or EVM wallet, and the OutLayer attested-purchase stretch (Phase 14). The real-family pilot has not run, so there are no pilot numbers here.
+- **Not built yet:** funding from real chains and top-ups (they need the mainnet accounts), refunds on-chain, sign-in with a NEAR or EVM wallet, and an OutLayer attested purchase. The real-family pilot has not run, so there are no pilot numbers here.
 - **Other projects:** none is named yet; if anyone on the team also works on another hackathon project, it will be listed here.
 
 ## License
