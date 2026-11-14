@@ -13,10 +13,12 @@
     "setup:agent-production": "tsx src/setup/agent-production.ts",
     "spike:vtpass": "tsx src/spike/vtpass.ts",
     "deploy:receipts:testnet": "tsx src/deploy-receipts.ts",
+    "deploy:vault:testnet": "tsx src/deploy-vault.ts",
     "drill:billers": "tsx src/drill/billers.ts",
     "eval:bot": "tsx src/eval/bot.ts",
     "drill:recipient": "tsx src/drill/recipient.ts",
     "drill:attacks": "tsx src/drill/attacks.ts",
+    "drill:vault": "tsx src/drill/vault.ts",
     "audit:receipts": "tsx src/audit-receipts.ts",
     "audit:secrets": "tsx src/audit-secrets.ts"
   },

@@ -1,3 +1,5 @@
+import { API_URL } from "../app/api.js";
+
 // The hero's one moment: a family member asks for light, the assistant
 // replies, and a receipt stub prints. It plays once on load and again on
 // request. With reduced motion, the finished scene shows at once.
@@ -55,3 +57,36 @@ async function play() {
 
 replay.addEventListener("click", () => void play());
 void play();
+
+// "Try it now": the bot makes a ready-made demo family and answers with its
+// judge view (the sender's app, the relative's chat and the chain). The
+// hosted bot may be asleep, so say so while it wakes.
+async function tryDemo(button: HTMLButtonElement, status: HTMLElement) {
+  button.disabled = true;
+  status.textContent = "Setting up a demo family…";
+  const slow = setTimeout(() => {
+    status.textContent = "Waking the demo up. On free hosting this can take about 30 seconds.";
+  }, 4_000);
+  try {
+    const res = await fetch(`${API_URL}/demo/try`, { method: "POST" });
+    const body = (await res.json().catch(() => ({}))) as { judge?: string; error?: string };
+    if (res.ok && body.judge) {
+      location.assign(body.judge);
+      return;
+    }
+    status.textContent = body.error ?? "The demo couldn't start just now. Please try again.";
+  } catch {
+    status.textContent =
+      "The demo couldn't be reached. Try again in a minute, or run it locally with make demo.";
+  } finally {
+    clearTimeout(slow);
+    button.disabled = false;
+  }
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-try-demo]")) {
+  const status = button
+    .closest(".wrap, .hero-copy")
+    ?.querySelector<HTMLElement>("[data-try-status]");
+  if (status) button.addEventListener("click", () => void tryDemo(button, status));
+}

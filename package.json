@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm -r build && pnpm build:contracts",
     "build:ts": "pnpm -r build",
-    "build:contracts": "cargo near build non-reproducible-wasm --manifest-path contracts/receipts/Cargo.toml",
+    "build:contracts": "cargo near build non-reproducible-wasm --manifest-path contracts/receipts/Cargo.toml && cargo near build non-reproducible-wasm --manifest-path contracts/test-usdc/Cargo.toml && cargo near build non-reproducible-wasm --manifest-path contracts/vault/Cargo.toml",
     "test": "pnpm -r test && pnpm test:contracts",
     "test:ts": "pnpm -r test",
     "test:contracts": "cargo test --manifest-path contracts/Cargo.toml",
@@ -22,11 +22,13 @@
     "setup:agent-production": "pnpm --filter @earmark/scripts setup:agent-production",
     "spike:vtpass": "pnpm --filter @earmark/scripts spike:vtpass",
     "deploy:receipts:testnet": "pnpm --filter @earmark/scripts deploy:receipts:testnet",
+    "deploy:vault:testnet": "pnpm --filter @earmark/scripts deploy:vault:testnet",
     "drill:billers": "pnpm --filter @earmark/scripts drill:billers",
     "eval:bot": "pnpm --filter @earmark/scripts eval:bot",
     "start:bot": "pnpm --filter @earmark/bot start",
     "drill:recipient": "pnpm --filter @earmark/scripts drill:recipient",
     "drill:attacks": "pnpm --filter @earmark/scripts drill:attacks",
+    "drill:vault": "pnpm --filter @earmark/scripts drill:vault",
     "audit:receipts": "pnpm --filter @earmark/scripts audit:receipts",
     "drill:failures": "pnpm --filter @earmark/bot exec vitest run src/drills.test.ts",
     "audit:secrets": "pnpm --filter @earmark/scripts audit:secrets"

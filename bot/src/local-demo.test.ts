@@ -38,6 +38,20 @@ async function until<T>(f: () => Promise<T | false>, ms = 15_000): Promise<T> {
 }
 
 describe("the keyless local demo", () => {
+  it("'Try it now' makes a fresh family with its chat connected and a judge view to open", async () => {
+    const res = await fetch(`${demo.botUrl}/demo/try`, { method: "POST" });
+    expect(res.status).toBe(201);
+    const { judge } = (await res.json()) as { judge: string };
+    const family = new URL(judge).searchParams.get("family");
+    expect(family).toMatch(/^fam_[a-z0-9]{16}$/);
+    expect(family).not.toBe(demo.familyId);
+    expect(new URL(judge).searchParams.get("bot")).toBe(demo.botUrl);
+    const v = (await (await fetch(`${demo.botUrl}/demo/family?family=${family}`)).json()) as {
+      transcript: { from: string; text: string }[];
+    };
+    expect(v.transcript.some((t) => /connected to Ada's family/.test(t.text))).toBe(true);
+  });
+
   it("pays a bill from a chat message and writes a receipt the page can read", async () => {
     await say("abeg buy 5k light for my meter");
     const summary = await until(async () => {

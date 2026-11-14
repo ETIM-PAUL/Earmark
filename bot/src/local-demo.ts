@@ -134,6 +134,20 @@ export async function startLocalDemo(opts: LocalDemoOptions = {}): Promise<Local
         .catch(() => res.writeHead(500).end());
       return;
     }
+    // The home page's "Try it now": a ready-made family and its judge view.
+    if (req.method === "POST" && req.url === "/demo/try") {
+      if (!bot) return void res.writeHead(503, cors).end();
+      const invite = bot.newInvite("Ada");
+      void bot
+        .onMessage(`web:${invite.familyId}`, `/start ${invite.code}`)
+        .then(() => {
+          if (!invite.judge) return void res.writeHead(503, cors).end();
+          res.writeHead(201, { ...cors, "content-type": "application/json" });
+          res.end(JSON.stringify({ judge: invite.judge }));
+        })
+        .catch(() => res.writeHead(500, cors).end());
+      return;
+    }
     // The recipient's side of the chat, for the judge page.
     if (req.method === "POST" && req.url === "/demo/say") {
       if (!local) return void res.writeHead(403, cors).end();

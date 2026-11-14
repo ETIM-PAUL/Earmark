@@ -214,7 +214,7 @@ export function createBot(opts: BotOptions) {
         : null,
       judge:
         contract && l.botUrl
-          ? `${web}/judge.html?network=testnet&contract=${contract}&family=${familyId}&bot=${l.botUrl}${l.rpcUrl ? `&rpc=${encodeURIComponent(l.rpcUrl)}` : ""}`
+          ? `${web}/judge.html?network=testnet&contract=${contract}&family=${familyId}&bot=${encodeURIComponent(l.botUrl)}${l.rpcUrl ? `&rpc=${encodeURIComponent(l.rpcUrl)}` : ""}`
           : null,
     };
   }

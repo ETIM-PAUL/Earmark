@@ -51,8 +51,11 @@
             </p>
             <div class="hero-actions">
               <a class="btn mark large" href="/app/#/signup">Create your account</a>
-              <a class="btn ghost-dark large" href="#how">See how it works</a>
+              <button type="button" class="btn ghost-dark large" data-try-demo>
+                Try it now, no sign-up
+              </button>
             </div>
+            <p class="try-status" data-try-status role="status" aria-live="polite"></p>
             <p class="hero-fine">
               Built on NEAR. Every payment leaves a public receipt with no names or numbers on it.
             </p>
@@ -287,12 +290,14 @@
         <div class="wrap">
           <h2 id="cta-h">Try it in two minutes.</h2>
           <p class="lede">
-            Create an account with a passkey, set up a demo family and ask for a bill.
+            Open a ready-made demo family and ask for a bill as the relative, or create an account
+            with a passkey and set up your own.
           </p>
           <div class="hero-actions">
-            <a class="btn mark" href="/app/#/signup">Create your account</a>
-            <a class="btn ghost-dark" href="/app/#/signin">Sign in</a>
+            <button type="button" class="btn mark" data-try-demo>Try it now, no sign-up</button>
+            <a class="btn ghost-dark" href="/app/#/signup">Create your account</a>
           </div>
+          <p class="try-status" data-try-status role="status" aria-live="polite"></p>
         </div>
       </section>
     </main>

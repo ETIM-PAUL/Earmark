@@ -133,6 +133,15 @@
   gap: 0.75rem;
   margin-top: 2rem;
 }
+.try-status {
+  min-height: 1.5em;
+  margin-top: 0.75rem;
+  font-size: var(--step--1);
+  color: var(--on-surface-variant);
+}
+.try-status:empty {
+  display: none;
+}
 .hero-fine {
   margin-top: 1.5rem;
   font-size: var(--step--1);

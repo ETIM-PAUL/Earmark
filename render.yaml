@@ -47,6 +47,30 @@ services:
         sync: false # set to this service's own onrender.com URL once known
       - key: ALERTS_TELEGRAM_CHAT_ID
         sync: false
+      # The testnet receipts contract and its writer, from
+      # .earmark/receipts-testnet.json (pnpm deploy:receipts:testnet).
+      # Without them the hosted demo pays bills but records no receipts.
+      - key: RECEIPTS_TESTNET_CONTRACT_ID
+        sync: false
+      - key: RECEIPTS_TESTNET_SERVICE_ACCOUNT_ID
+        sync: false
+      - key: RECEIPTS_TESTNET_SERVICE_PRIVATE_KEY
+        sync: false
+      # The family vault on testnet (pnpm deploy:vault:testnet prints these;
+      # the two keys are in .earmark/vault-testnet.json). With them, the vault
+      # pays settlement in test USDC; without them, settlement is simulated.
+      - key: VAULT_TESTNET_CONTRACT_ID
+        sync: false
+      - key: VAULT_TESTNET_TOKEN_ID
+        sync: false
+      - key: VAULT_TESTNET_AGENT_ACCOUNT_ID
+        sync: false
+      - key: VAULT_TESTNET_AGENT_PAY_KEY
+        sync: false
+      - key: VAULT_TESTNET_ADMIN_ACCOUNT_ID
+        sync: false
+      - key: VAULT_TESTNET_ADMIN_KEY
+        sync: false
 
   # Biller service: health, naira quotes, the float guard and the VTpass
   # webhook. Not called by `bot` today (it imports @earmark/billers as a

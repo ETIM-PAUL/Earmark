@@ -1,7 +1,7 @@
 import { Quoter } from "@earmark/billers";
 import type { Order, ReceiptInput } from "@earmark/shared";
 import { createBot } from "./app.js";
-import { type DemoWiring, wireDemo } from "./demo.js";
+import { type DemoWiring, type Payer, wireDemo } from "./demo.js";
 import { simVtpass } from "./mock/sim-vtpass.js";
 import type { ChatModel } from "./model.js";
 import { Monitor } from "./monitor.js";
@@ -291,7 +291,18 @@ function recording(model: ChatModel, into: unknown[]): ChatModel {
 }
 
 /** Runs one attack in a fresh family and reports what the money did. */
-export async function runAttack(attack: Attack, model: ChatModel): Promise<AttackOutcome> {
+export interface RunOptions {
+  /** Pay settlement through this instead of the simulated payer (e.g. the testnet vault). */
+  payer?: Payer;
+  /** Called with the wiring before the family exists, e.g. to mirror it onto the vault. */
+  onDemo?: (demo: DemoWiring) => void;
+}
+
+export async function runAttack(
+  attack: Attack,
+  model: ChatModel,
+  opts: RunOptions = {},
+): Promise<AttackOutcome> {
   const sim = simVtpass({ balanceNgn: 1_000_000 });
   const extracted: unknown[] = [];
   const outbox: string[] = [];
@@ -320,8 +331,9 @@ export async function runAttack(attack: Attack, model: ChatModel): Promise<Attac
     alert: () => {},
     payer: {
       pay: async (o) => {
+        const out = opts.payer ? await opts.payer.pay(o) : { txHash: `pay-${o.id}` };
         paid += 1;
-        return { txHash: `pay-${o.id}` };
+        return out;
       },
     },
     refunds: { refund: async (o) => ({ txHash: `refund-${o.id}` }) },
@@ -337,6 +349,7 @@ export async function runAttack(attack: Attack, model: ChatModel): Promise<Attac
     monitor: new Monitor({ send: () => {} }),
   });
   bot = live;
+  opts.onDemo?.(demo);
   const chat = `web:attack-${attack.id}`;
 
   const invite = live.newInvite("Ada");

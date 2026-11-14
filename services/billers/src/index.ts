@@ -13,4 +13,5 @@ export * from "./purchase.js";
 export * from "./quote.js";
 export * from "./receipts.js";
 export * from "./store.js";
+export * from "./vault.js";
 export * from "./webhook.js";

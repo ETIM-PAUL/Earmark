@@ -134,7 +134,7 @@ async function main() {
     "",
     "How it reads every receipt: the order IDs come from the contract's own storage (the keys of its receipts map, via `view_state`), their number must equal `receipt_count()`, and each receipt is read back through `get_receipt()`. A receipt the audit can't see would make the first check fail.",
     "",
-    `What the receipts are: VTpass sandbox purchases from the biller drill and the demo, so the bills were real sandbox purchases. The payment into settlement is simulated in this build: ${simulated} of ${receipts.length} payment references are drill or demo labels, not NEAR transactions.`,
+    `What the receipts are: VTpass sandbox purchases from the biller drill and the demo. ${simulated} of ${receipts.length} payment references are drill or demo labels (a simulated payment into settlement); the other ${receipts.length - simulated} are transactions of the family vault on NEAR testnet, paid in test USDC.`,
     "",
     "The contract enforces the same formats when a receipt is written (`contracts/receipts/src/lib.rs`); this audit checks the result from outside, the way anyone can.",
     "",

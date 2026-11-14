@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
+import { NearVault } from "@earmark/billers";
 import {
   agentApiEnv,
   billersEnv,
@@ -13,17 +14,20 @@ import {
   vtpassEnv,
 } from "@earmark/config";
 import { createAgentApi } from "@near-intents-agent-api/sdk";
+import type { KeyPairString } from "near-api-js";
 import { SenderAccounts } from "./accounts.js";
 import { createAgentApiPayer } from "./agent-payer.js";
 import { apiRoute } from "./api.js";
 import { type Bot, createBot } from "./app.js";
 import { Telegram, WhatsApp } from "./channels.js";
 import { demoPorts } from "./demo.js";
+import { RateLimiter } from "./limits.js";
 import { NearAiModel } from "./model.js";
 import { Monitor } from "./monitor.js";
 import { Passkeys } from "./passkeys.js";
 import { senderRoute } from "./sender-api.js";
 import { FamilyTeam } from "./team.js";
+import { VaultSync } from "./vault.js";
 
 // The assistant: Telegram (long polling) and WhatsApp (Twilio webhook) in
 // front of one dialog engine. Demo mode until the order service lands.
@@ -40,6 +44,9 @@ try {
 const port = Number(process.env.BOT_PORT ?? 4003);
 /** Public https URL that Twilio posts to, e.g. an ngrok tunnel. Needed to check signatures. */
 const publicUrl = process.env.BOT_PUBLIC_URL?.replace(/\/+$/, "");
+/** Where a browser reaches this bot, for judge-view links. Render sets RENDER_EXTERNAL_URL. */
+const publicBotUrl =
+  publicUrl ?? process.env.RENDER_EXTERNAL_URL?.replace(/\/+$/, "") ?? `http://localhost:${port}`;
 
 const ai = readEnv(nearAiEnv);
 const vt = readEnv(vtpassEnv);
@@ -101,6 +108,42 @@ const passkeys = new Passkeys({
   origin: new URL(webUrl).origin,
   accounts,
 });
+// The testnet receipts contract on a host without .earmark/ (Render): the
+// same three values as .earmark/receipts-testnet.json, as secrets.
+function testnetReceiptsFromEnv() {
+  const contractId = process.env.RECEIPTS_TESTNET_CONTRACT_ID?.trim();
+  const serviceAccountId = process.env.RECEIPTS_TESTNET_SERVICE_ACCOUNT_ID?.trim();
+  const servicePrivateKey = process.env.RECEIPTS_TESTNET_SERVICE_PRIVATE_KEY?.trim();
+  return contractId && serviceAccountId && servicePrivateKey
+    ? { contractId, serviceAccountId, servicePrivateKey }
+    : null;
+}
+
+// Settlement through the family vault on NEAR testnet (pnpm deploy:vault:testnet):
+// the vault checks the sender's hard limits on chain and pays in test USDC.
+// The payment path holds a key that can only call vault.pay.
+function vaultFromEnv() {
+  const e = (k: string) => process.env[k]?.trim();
+  const vaultId = e("VAULT_TESTNET_CONTRACT_ID");
+  const tokenId = e("VAULT_TESTNET_TOKEN_ID");
+  const agentId = e("VAULT_TESTNET_AGENT_ACCOUNT_ID");
+  const agentKey = e("VAULT_TESTNET_AGENT_PAY_KEY");
+  const adminId = e("VAULT_TESTNET_ADMIN_ACCOUNT_ID");
+  const adminKey = e("VAULT_TESTNET_ADMIN_KEY");
+  if (!vaultId || !tokenId || !agentId || !agentKey || !adminId || !adminKey) return null;
+  return new VaultSync(
+    new NearVault({
+      rpcUrl: "https://rpc.testnet.fastnear.com",
+      vaultId,
+      tokenId,
+      agent: { accountId: agentId, privateKey: agentKey as KeyPairString },
+      admin: { accountId: adminId, privateKey: adminKey as KeyPairString },
+    }),
+    (m) => monitor.alert(m),
+  );
+}
+const vault = process.env.AGENT_API_REAL_PAYMENTS === "true" ? null : vaultFromEnv();
+
 // Real settlement through the Agent API, from `pnpm setup:agent-production`.
 // Off by default: every other run stays on the simulated payer, as before.
 async function realPayer() {
@@ -137,12 +180,14 @@ const demo = await demoPorts({
   floatFloorNgn: knobs.VTPASS_FLOAT_FLOOR_NGN,
   model,
   testnetStateFile: resolve(ROOT, ".earmark/receipts-testnet.json"),
+  testnetReceipts: testnetReceiptsFromEnv(),
   receiptsPageUrl: `${webUrl}/receipt.html`,
   onOrderUpdate: (o) => bot?.onOrderUpdate(o),
   onOrderWaiting: (o) => bot?.onOrderWaiting(o),
   alert: (m) => monitor.alert(m),
-  ...(await realPayer()),
+  ...(vault ? { payer: vault.payer() } : await realPayer()),
 });
+vault?.attach(demo);
 
 const botName = telegram ? await telegram.start() : null;
 const whatsappNumber = isConfigured(twilioEnv)
@@ -153,7 +198,7 @@ bot = createBot({
   demo,
   send,
   monitor,
-  links: { telegramBot: botName, whatsappNumber, webUrl, botUrl: `http://localhost:${port}` },
+  links: { telegramBot: botName, whatsappNumber, webUrl, botUrl: publicBotUrl },
 });
 const app = bot;
 
@@ -163,6 +208,12 @@ setInterval(() => {
 }, 60_000).unref();
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+// "Try it now" on the home page makes a demo family per click. Families live
+// in memory, so clicks are limited per visitor and in total.
+const tryLimiter = new RateLimiter({ burst: 5, refillMs: 10 * 60_000 });
+const MAX_TRY_FAMILIES = 1_000;
+let triedFamilies = 0;
 
 // ── HTTP: health and the Twilio webhook ───────────────────────────────
 
@@ -293,6 +344,33 @@ const server = createServer((req, res) => {
       app.onMessage(`web:${family}`, text).catch((e) => console.error(`demo chat: ${String(e)}`));
       res.writeHead(202, cors).end();
     });
+    return;
+  }
+
+  // The home page's "Try it now": a ready-made demo family, its web chat
+  // connected, and the judge view to open. No sign-up.
+  if (req.method === "POST" && req.url === "/demo/try") {
+    const cors = { "access-control-allow-origin": webUrl, vary: "Origin" };
+    const visitor = String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "")
+      .split(",")[0]
+      ?.trim();
+    if (tryLimiter.admit(visitor || "unknown") !== "ok" || triedFamilies >= MAX_TRY_FAMILIES) {
+      res.writeHead(429, { ...cors, "content-type": "application/json" });
+      res.end(
+        JSON.stringify({ error: "Lots of demo families just now. Try again in a few minutes." }),
+      );
+      return;
+    }
+    triedFamilies += 1;
+    const invite = app.newInvite("Ada");
+    app
+      .onMessage(`web:${invite.familyId}`, `/start ${invite.code}`)
+      .then(() => {
+        if (!invite.judge) return void res.writeHead(503, cors).end();
+        res.writeHead(201, { ...cors, "content-type": "application/json" });
+        res.end(JSON.stringify({ judge: invite.judge }));
+      })
+      .catch(() => res.writeHead(500, cors).end());
     return;
   }
 

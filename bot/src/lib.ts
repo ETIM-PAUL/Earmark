@@ -19,3 +19,4 @@ export * from "./pidgin.js";
 export * from "./providers.js";
 export * from "./sender-api.js";
 export * from "./variations.js";
+export * from "./vault.js";

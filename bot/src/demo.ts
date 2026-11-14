@@ -67,6 +67,13 @@ import { isPlainDataBundle, type Option } from "./variations.js";
  * run the same wiring against a simulated VTpass, payer and chain.
  */
 
+/** The testnet receipts contract and the one account allowed to write to it. */
+export interface TestnetReceipts {
+  contractId: string;
+  serviceAccountId: string;
+  servicePrivateKey: string;
+}
+
 export interface DemoConfig {
   vtpass: { baseUrl: string; apiKey: string; publicKey: string; secretKey: string };
   spreadBps: number;
@@ -74,6 +81,11 @@ export interface DemoConfig {
   model: ChatModel;
   /** .earmark/receipts-testnet.json from pnpm deploy:receipts:testnet, if present. */
   testnetStateFile: string;
+  /**
+   * The same contract and service key from the environment, for a host with
+   * no .earmark/ (Render). Used when the file isn't there.
+   */
+  testnetReceipts?: TestnetReceipts | null;
   /** e.g. http://localhost:5173/receipt.html */
   receiptsPageUrl: string;
   /** Tells a chat that its order moved. */
@@ -279,16 +291,28 @@ export async function demoPorts(cfg: DemoConfig): Promise<DemoWiring> {
   let receipts: ReceiptWriter;
   let contractId: string | null = null;
   try {
-    const t = JSON.parse(await readFile(cfg.testnetStateFile, "utf8")) as {
-      contract: { accountId: string };
-      service: { accountId: string; privateKey: string };
-    };
-    contractId = t.contract.accountId;
+    const t = await readFile(cfg.testnetStateFile, "utf8")
+      .then((raw) => {
+        const f = JSON.parse(raw) as {
+          contract: { accountId: string };
+          service: { accountId: string; privateKey: string };
+        };
+        return {
+          contractId: f.contract.accountId,
+          serviceAccountId: f.service.accountId,
+          servicePrivateKey: f.service.privateKey,
+        };
+      })
+      .catch((e) => {
+        if (cfg.testnetReceipts) return cfg.testnetReceipts;
+        throw e;
+      });
+    contractId = t.contractId;
     receipts = new NearReceiptWriter({
       rpcUrl: "https://rpc.testnet.fastnear.com",
       contractId,
-      serviceAccountId: t.service.accountId,
-      servicePrivateKey: t.service.privateKey as KeyPairString,
+      serviceAccountId: t.serviceAccountId,
+      servicePrivateKey: t.servicePrivateKey as KeyPairString,
     });
   } catch {
     console.warn(
