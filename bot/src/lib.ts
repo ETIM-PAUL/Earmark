@@ -4,6 +4,7 @@ export * from "./accounts.js";
 export * from "./api.js";
 export * from "./app.js";
 export * from "./approvals.js";
+export * from "./attack-drill.js";
 export * from "./copy.js";
 export * from "./demo.js";
 export * from "./dialog.js";

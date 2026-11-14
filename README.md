@@ -1,5 +1,7 @@
 # Earmark
 
+**Judges:** start with [JUDGES.md](JUDGES.md): the [hosted app](https://earmark-web-o0gi.onrender.com), receipts read live from NEAR, and one command per claim with what you should see.
+
 **What it is.** Send money home with rules. Someone abroad funds a family account from any chain and signs spending rules once. A family member then asks an AI assistant, in English or Pidgin, to pay household bills inside those rules: prepaid electricity, airtime, data and TV. Every payment gets a public receipt on NEAR with no personal data.
 
 **The problem.** Nigerians abroad sent home $21.8B in 2025, and senders can't control how it gets spent. Cash sent home can't be limited to bills, and a bill paid by the sender needs the sender awake, online and on the phone. Earmark lets the sender set the rules once and lets the recipient do the asking.
@@ -178,7 +180,7 @@ Names, phone numbers, meter numbers and tokens never go on-chain. Each receipt c
 - **No code from before the hackathon.** Open-source libraries in use: zod, React, Vite, near-sdk-rs, near-workspaces, vitest, Biome, `@near-intents-agent-api/sdk` and near-api-js. The Agent API flows follow the patterns in the NEAR-Intents-Agent-API SDK README and examples repository.
 - **Our role.** Earmark is the naira settlement partner: families pay USDC to our settlement account, and we pay the bill from our VTpass wallet in naira. The VTpass float is ours, topped up in naira.
 - **Mocked in** `make demo`**:** VTpass, the chain, the model and the naira rate (table above). The simulated VTpass delivers every bill; the real one can refuse, delay or reverse, which the drills cover.
-- **Not built yet:** the money flow (Phase 8), funding and top-ups (the funding half of Phase 12, which needs the mainnet accounts), and sign-in with a NEAR or EVM wallet, the OutLayer attested-purchase stretch (Phase 14), and the hosted demo. The real-family pilot has not run, so there are no pilot numbers here.
+- **Not built yet:** the money flow (Phase 8), funding and top-ups (the funding half of Phase 12, which needs the mainnet accounts), sign-in with a NEAR or EVM wallet, and the OutLayer attested-purchase stretch (Phase 14). The real-family pilot has not run, so there are no pilot numbers here.
 - **Other projects:** none is named yet; if anyone on the team also works on another hackathon project, it will be listed here.
 
 ## License

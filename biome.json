@@ -8,7 +8,9 @@
       "!**/node_modules",
       "!.earmark",
       "!docs",
-      "!pnpm-workspace.yaml"
+      "!pnpm-workspace.yaml",
+      "!evidence",
+      "!HACKATHON.md"
     ]
   },
   "formatter": {
